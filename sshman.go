@@ -1,3 +1,6 @@
+/*
+* Менеджер SSH-соединений
+ */
 package main
 
 import (
