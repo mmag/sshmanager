@@ -1,5 +1,5 @@
 /*
-* Менеджер SSH-соединений
+* SSH Connection Manager
  */
 package main
 
@@ -8,11 +8,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -27,16 +25,17 @@ type SSHConnection struct {
 var sshConnections []SSHConnection
 var configDir = filepath.Join(os.Getenv("HOME"), "sshman")
 var configFilePath = filepath.Join(configDir, "sshman.json")
-var menuList *tview.List // добавить в начало файла с другими глобальными переменными
+var menuList *tview.List
 var helpText *tview.TextView
 
-// Добавим константы для размеров форм
+// Add constants for form dimensions
 const (
-	formWidth  = 100 // увеличим ширину для лучшей читаемости
-	formHeight = 60  // уменьшим высоту для компактности
+	formWidth  = 100 // increase width for better readability
+	formHeight = 60  // decrease height for compactness
 )
 
-// Add this function after the global variables:
+// createMainLayout creates and returns the main application layout with the specified heights
+// for connections list, menu, and help sections based on screen height
 func createMainLayout(app *tview.Application, connectionsList *tview.List) *tview.Flex {
 	// Устанавливаем фиксированную высоту терминала
 	const screenHeight = 80
@@ -58,7 +57,8 @@ func createMainLayout(app *tview.Application, connectionsList *tview.List) *tvie
 		AddItem(helpText, helpHeight, 0, false)
 }
 
-// Функция для выполнения SSH-команды
+// sshConnect establishes an SSH connection to the specified server using the saved configuration
+// It supports custom port specification and handles connection errors
 func sshConnect(server string) {
 	var connection SSHConnection
 	for _, conn := range sshConnections {
@@ -84,7 +84,7 @@ func sshConnect(server string) {
 	}
 }
 
-// Обновим функцию centerWidget для фиксированных размеров
+// centerWidget centers the provided widget in the screen with specified form dimensions
 func centerWidget(widget tview.Primitive) *tview.Flex {
 	widget.SetRect(0, 0, formWidth, formHeight)
 	return tview.NewFlex().
@@ -97,7 +97,8 @@ func centerWidget(widget tview.Primitive) *tview.Flex {
 		AddItem(nil, 0, 1, false)
 }
 
-// Функция проверки существующего соединения
+// isConnectionExists checks if a connection with the given server address already exists
+// Returns true if the connection exists, false otherwise
 func isConnectionExists(server string) bool {
 	for _, conn := range sshConnections {
 		if conn.Server == server {
@@ -107,15 +108,8 @@ func isConnectionExists(server string) bool {
 	return false
 }
 
-// Функция валидации IP адреса
-func isValidIP(ip string) bool {
-	if parts := strings.Split(ip, "@"); len(parts) > 1 {
-		ip = parts[1]
-	}
-	return net.ParseIP(ip) != nil
-}
-
-// Обновим функцию addConnection
+// addConnection displays a form for adding a new SSH connection
+// Validates input and saves the new connection to the configuration
 func addConnection(app *tview.Application, connectionsList *tview.List) {
 	var form *tview.Form
 	errorText := tview.NewTextView().SetText("")
@@ -125,15 +119,8 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 				return
 			}
 			if isConnectionExists(text) {
-				errorText.SetText("Такое соединение уже существует")
+				errorText.SetText("Connection already exists")
 				return
-			}
-			if strings.Contains(text, "@") {
-				parts := strings.Split(text, "@")
-				if isValidIP(parts[1]) {
-					errorText.SetText("IP адрес не допускается, используйте имя хоста")
-					return
-				}
 			}
 			errorText.SetText("")
 		}).
@@ -153,8 +140,7 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 				return
 			}
 
-			if !isConnectionExists(server) &&
-				(!strings.Contains(server, "@") || !isValidIP(strings.Split(server, "@")[1])) {
+			if !isConnectionExists(server) {
 				connection := SSHConnection{Server: server, Port: port, Comment: comment}
 				sshConnections = append(sshConnections, connection)
 
@@ -194,7 +180,8 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 	app.SetFocus(form)
 }
 
-// Функция для сохранения списка соединений в файл
+// saveConnections writes the current connections list to the configuration file
+// Creates the config directory if it doesn't exist
 func saveConnections() {
 	// Ensure the config directory exists
 	if err := os.MkdirAll(configDir, 0755); err != nil {
@@ -218,7 +205,8 @@ func saveConnections() {
 	}
 }
 
-// Функция для загрузки списка соединений из файла
+// loadConnections reads and parses the SSH connections from the configuration file
+// Silently handles the case when the config file doesn't exist
 func loadConnections() {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
@@ -233,7 +221,8 @@ func loadConnections() {
 	}
 }
 
-// Обновим функцию showMessage для подтверждения соединения
+// showMessage displays a confirmation dialog before establishing an SSH connection
+// Suspends the application while the SSH connection is active
 func showMessage(app *tview.Application, list *tview.List, server string) {
 	modal := tview.NewModal().
 		SetText(fmt.Sprintf("Подключиться к %s?", server)).
@@ -249,7 +238,7 @@ func showMessage(app *tview.Application, list *tview.List, server string) {
 	app.SetRoot(centerWidget(modal), true)
 }
 
-// Добавим новую функцию для открытия конфига
+// openConfig opens the configuration file in the default system editor
 func openConfig() {
 	cmd := exec.Command("open", configFilePath)
 	err := cmd.Run()
@@ -258,7 +247,8 @@ func openConfig() {
 	}
 }
 
-// Добавим функцию для удаления соединения
+// deleteConnection shows a confirmation dialog and removes the selected connection
+// Updates both the UI list and the saved configuration
 func deleteConnection(app *tview.Application, list *tview.List, index int) {
 	if index < 0 || index >= len(sshConnections) {
 		return
@@ -282,7 +272,8 @@ func deleteConnection(app *tview.Application, list *tview.List, index int) {
 	app.SetRoot(centerWidget(modal), true)
 }
 
-// Добавим функцию для редактирования соединения
+// editConnection displays a form for editing an existing SSH connection
+// Validates input and updates both the UI and saved configuration
 func editConnection(app *tview.Application, connectionsList *tview.List, index int) {
 	if index < 0 || index >= len(sshConnections) {
 		return
@@ -297,15 +288,8 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 				return
 			}
 			if text != connection.Server && isConnectionExists(text) {
-				errorText.SetText("Такое соединение уже существует")
+				errorText.SetText("Connection already exists")
 				return
-			}
-			if strings.Contains(text, "@") {
-				parts := strings.Split(text, "@")
-				if isValidIP(parts[1]) {
-					errorText.SetText("IP адрес не допускается, используйте имя хоста")
-					return
-				}
 			}
 			errorText.SetText("")
 		}).
@@ -325,8 +309,7 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 				return
 			}
 
-			if (server == connection.Server || !isConnectionExists(server)) &&
-				(!strings.Contains(server, "@") || !isValidIP(strings.Split(server, "@")[1])) {
+			if server == connection.Server || !isConnectionExists(server) {
 				sshConnections[index] = SSHConnection{Server: server, Port: port, Comment: comment}
 				connectionsList.RemoveItem(index)
 				connectionsList.InsertItem(index, fmt.Sprintf("%s - %s", server, comment), "", 0, func() {
@@ -382,24 +365,25 @@ func showContextMenu(app *tview.Application, connectionsList *tview.List, index 
 	app.SetRoot(centerWidget(menuFlex), true)
 }
 
-// Главная функция
+// main initializes and runs the SSH connection manager application
+// Sets up the UI, loads configuration and handles user input
 func main() {
 	app := tview.NewApplication()
 
-	// Загрузка списка соединений из файла
+	// Load connections from file
 	loadConnections()
 
-	// Создание списка соединений
+	// Create connections list
 	connectionsList := tview.NewList().ShowSecondaryText(false)
 	connectionsList.SetTitle("Соединения").SetBorder(true).SetTitleAlign(tview.AlignLeft)
 
-	// Создание меню
-	menuList = tview.NewList().ShowSecondaryText(false) // убрать var
+	// Create menu
+	menuList = tview.NewList().ShowSecondaryText(false)
 	menuList.SetTitle("Меню").SetBorder(true).SetTitleAlign(tview.AlignLeft)
 
-	// Добавление существующих соединений
+	// Add existing connections
 	if len(sshConnections) == 0 {
-		connectionsList.AddItem("Нет сохраненных соединений", "", 0, nil)
+		connectionsList.AddItem("No saved connections", "", 0, nil)
 	} else {
 		for _, conn := range sshConnections {
 			server := conn.Server
@@ -412,8 +396,8 @@ func main() {
 		}
 	}
 
-	// Добавление пунктов меню
-	menuList.AddItem("Добавить соединение", "", 0, func() {
+	// Add menu items
+	menuList.AddItem("Add connection", "", 0, func() {
 		addConnection(app, connectionsList)
 	})
 	menuList.AddItem("Редактировать конфиг", "", 0, func() {
@@ -423,15 +407,15 @@ func main() {
 		app.Stop()
 	})
 
-	// Обновим текст справки:
+	// Update help text
 	helpText = tview.NewTextView().
-		SetText("Управление:\n" +
-			"↑↓ - Навигация по списку\n" +
-			"Enter - Подключиться\n" +
-			"Ctrl+E - Редактировать соединение\n" +
-			"Ctrl+N - Добавить соединение\n" +
-			"Del - Удалить соединение\n" +
-			"Ctrl+C - Выход").
+		SetText("Controls:\n" +
+			"↑↓ - Navigate list\n" +
+			"Enter - Connect\n" +
+			"Ctrl+E - Edit connection\n" +
+			"Ctrl+N - Add connection\n" +
+			"Del - Delete connection\n" +
+			"Ctrl+C - Exit").
 		SetTextAlign(tview.AlignLeft)
 	helpText.SetBorder(true).SetTitle("Помощь").SetTitleAlign(tview.AlignLeft)
 
