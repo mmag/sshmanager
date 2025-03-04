@@ -4,3 +4,4 @@ sshman
 sshmanager
 .DS*
 *.go_ 
+lang/.DS*
