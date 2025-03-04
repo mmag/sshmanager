@@ -14,7 +14,7 @@ A terminal-based SSH connection manager written in Go using [tview](https://gith
 ## Installation
 
 ```bash
-go install github.com/yourusername/sshman@latest
+go install github.com/mmag/sshmanager@latest
 ```
 
 ## Usage
