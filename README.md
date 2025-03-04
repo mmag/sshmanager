@@ -22,7 +22,7 @@ go install github.com/yourusername/sshman@latest
 Launch the application:
 
 ```bash
-sshman
+sshmanager
 ```
 
 ### Keyboard Shortcuts
@@ -41,18 +41,19 @@ Config file is stored at `~/sshman/sshman.json` in the following format:
 ```json
 [
     {
-        "server": "user@hostname",
+        "server": "user@hostnameOrIP",
         "comment": "Description",
         "port": "22"
-    }
+    },
+    "language": "en"
 ]
 ```
 
 ## Building from Source
 
 ```bash
-git clone https://github.com/yourusername/sshman.git
-cd sshman
+git clone https://github.com/mmag/sshmanager.git
+cd sshmanager
 go build
 ```
 
