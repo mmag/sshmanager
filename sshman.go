@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 
 	"github.com/gdamore/tcell/v2"
+	"github.com/mmag/sshmanager/lang"
 	"github.com/rivo/tview"
 )
 
@@ -34,22 +35,27 @@ const (
 	formHeight = 60  // decrease height for compactness
 )
 
+// Add global variables
+var (
+	currentLang = lang.EN // Default language
+)
+
 // createMainLayout creates and returns the main application layout with the specified heights
 // for connections list, menu, and help sections based on screen height
 func createMainLayout(app *tview.Application, connectionsList *tview.List) *tview.Flex {
-	// Устанавливаем фиксированную высоту терминала
+	// Set fixed terminal height
 	const screenHeight = 80
 
-	// Вычисляем высоту меню (количество пунктов + рамка)
+	// Calculate menu height (items count + border)
 	menuHeight := menuList.GetItemCount() + 2
 
-	// Вычисляем высоту справки (количество строк + рамка)
-	helpHeight := 8 // 6 строк текста + рамка сверху и снизу
+	// Calculate help height (text lines + border)
+	helpHeight := 8 // 6 text lines + top and bottom borders
 
-	// Вычисляем высоту списка соединений
+	// Calculate connections list height
 	connectionsHeight := screenHeight/2 - menuHeight - helpHeight
 
-	// Создаем вертикальный flex для списков и справки
+	// Create vertical flex for lists and help text
 	return tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(connectionsList, connectionsHeight, 0, true).
@@ -77,10 +83,10 @@ func sshConnect(server string) {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	log.Printf("Подключение к %s\n", connection.Server)
+	log.Printf(currentLang["msg_connecting"], connection.Server)
 	err := cmd.Run()
 	if err != nil {
-		log.Printf("Ошибка подключения к %s: %v\n", connection.Server, err)
+		log.Printf(currentLang["msg_conn_error"], connection.Server, err)
 	}
 }
 
@@ -114,29 +120,29 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 	var form *tview.Form
 	errorText := tview.NewTextView().SetText("")
 	form = tview.NewForm().
-		AddInputField("SSH сервер", "", 30, nil, func(text string) {
+		AddInputField(currentLang["form_server"], "", 30, nil, func(text string) {
 			if text == "" {
 				return
 			}
 			if isConnectionExists(text) {
-				errorText.SetText("Connection already exists")
+				errorText.SetText(currentLang["msg_conn_exists"])
 				return
 			}
 			errorText.SetText("")
 		}).
-		AddInputField("Порт", "", 5, nil, nil).
-		AddInputField("Комментарий", "", 30, nil, nil).
-		AddButton("Сохранить", func() {
+		AddInputField(currentLang["form_port"], "", 5, nil, nil).
+		AddInputField(currentLang["form_comment"], "", 30, nil, nil).
+		AddButton(currentLang["btn_save"], func() {
 			server := form.GetFormItem(0).(*tview.InputField).GetText()
 			port := form.GetFormItem(1).(*tview.InputField).GetText()
 			comment := form.GetFormItem(2).(*tview.InputField).GetText()
 
 			if server == "" {
-				errorText.SetText("Введите адрес сервера")
+				errorText.SetText(currentLang["msg_enter_server"])
 				return
 			}
 			if comment == "" {
-				errorText.SetText("Введите комментарий")
+				errorText.SetText(currentLang["msg_enter_comment"])
 				return
 			}
 
@@ -144,10 +150,10 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 				connection := SSHConnection{Server: server, Port: port, Comment: comment}
 				sshConnections = append(sshConnections, connection)
 
-				// Добавляем новый пункт
+				// Add new item
 				newIndex := connectionsList.GetItemCount()
 				mainText, _ := connectionsList.GetItemText(0)
-				if newIndex == 1 && mainText == "Нет сохраненных соединений" {
+				if newIndex == 1 && mainText == currentLang["msg_no_connections"] {
 					connectionsList.Clear()
 					newIndex = 0
 				}
@@ -156,26 +162,26 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 				})
 				saveConnections()
 
-				// Возвращаемся к основному экрану
+				// Return to main screen
 				app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
 				connectionsList.SetCurrentItem(newIndex)
 			}
 		}).
-		AddButton("Отмена", func() {
+		AddButton(currentLang["btn_cancel"], func() {
 			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
 		})
 
-	// Создаем flex для формы с текстом ошибки
+	// Create flex for form with error text
 	formFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(form, 0, 1, true).
 		AddItem(errorText, 1, 0, false)
 
 	formFlex.SetBorder(true).
-		SetTitle("Добавить соединение").
+		SetTitle(currentLang["title_add"]).
 		SetTitleAlign(tview.AlignLeft)
 
-	// Устанавливаем форму как активный виджет
+	// Set form as active widget
 	app.SetRoot(centerWidget(formFlex), true)
 	app.SetFocus(form)
 }
@@ -185,23 +191,23 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 func saveConnections() {
 	// Ensure the config directory exists
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		log.Printf("Ошибка создания директории конфигурации: %v\n", err)
+		log.Printf(currentLang["msg_config_dir_error"], err)
 		return
 	}
 
-	// Используем MarshalIndent вместо Marshal для форматированного вывода
+	// Use MarshalIndent instead of Marshal for formatted output
 	data, err := json.MarshalIndent(sshConnections, "", "    ")
 	if err != nil {
-		log.Printf("Ошибка сохранения соединений: %v\n", err)
+		log.Printf(currentLang["msg_save_error"], err)
 		return
 	}
 
-	// Добавляем перевод строки в конец файла
+	// Add newline at end of file
 	data = append(data, '\n')
 
 	err = ioutil.WriteFile(configFilePath, data, 0644)
 	if err != nil {
-		log.Printf("Ошибка записи файла: %v\n", err)
+		log.Printf(currentLang["msg_write_error"], err)
 	}
 }
 
@@ -211,13 +217,13 @@ func loadConnections() {
 	data, err := ioutil.ReadFile(configFilePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			log.Printf("Ошибка чтения файла: %v\n", err)
+			log.Printf(currentLang["msg_read_error"], err)
 		}
 		return
 	}
 	err = json.Unmarshal(data, &sshConnections)
 	if err != nil {
-		log.Printf("Ошибка разбора файла: %v\n", err)
+		log.Printf(currentLang["msg_parse_error"], err)
 	}
 }
 
@@ -225,10 +231,10 @@ func loadConnections() {
 // Suspends the application while the SSH connection is active
 func showMessage(app *tview.Application, list *tview.List, server string) {
 	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Подключиться к %s?", server)).
-		AddButtons([]string{"OK", "Отмена"}).
+		SetText(fmt.Sprintf(currentLang["dlg_connect"], server)).
+		AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "OK" {
+			if buttonLabel == currentLang["btn_ok"] {
 				app.Suspend(func() {
 					sshConnect(server)
 				})
@@ -243,7 +249,7 @@ func openConfig() {
 	cmd := exec.Command("open", configFilePath)
 	err := cmd.Run()
 	if err != nil {
-		log.Printf("Ошибка открытия конфига: %v\n", err)
+		log.Printf(currentLang["msg_config_open_error"], err)
 	}
 }
 
@@ -256,15 +262,15 @@ func deleteConnection(app *tview.Application, list *tview.List, index int) {
 
 	server := sshConnections[index].Server
 	modal := tview.NewModal().
-		SetText(fmt.Sprintf("Удалить соединение %s?", server)).
-		AddButtons([]string{"OK", "Отмена"}).
+		SetText(fmt.Sprintf(currentLang["dlg_delete"], server)).
+		AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-			if buttonLabel == "OK" {
-				// Удаляем из слайса
+			if buttonLabel == currentLang["btn_ok"] {
+				// Remove from slice
 				sshConnections = append(sshConnections[:index], sshConnections[index+1:]...)
-				// Удаляем из списка
+				// Remove from list
 				list.RemoveItem(index)
-				// Сохраняем изменения
+				// Save changes
 				saveConnections()
 			}
 			app.SetRoot(centerWidget(createMainLayout(app, list)), true)
@@ -283,29 +289,29 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 	var form *tview.Form
 	errorText := tview.NewTextView().SetText("")
 	form = tview.NewForm().
-		AddInputField("SSH сервер", connection.Server, 30, nil, func(text string) {
+		AddInputField(currentLang["form_server"], connection.Server, 30, nil, func(text string) {
 			if text == "" {
 				return
 			}
 			if text != connection.Server && isConnectionExists(text) {
-				errorText.SetText("Connection already exists")
+				errorText.SetText(currentLang["msg_conn_exists"])
 				return
 			}
 			errorText.SetText("")
 		}).
-		AddInputField("Порт", connection.Port, 5, nil, nil).
-		AddInputField("Комментарий", connection.Comment, 30, nil, nil).
-		AddButton("Сохранить", func() {
+		AddInputField(currentLang["form_port"], connection.Port, 5, nil, nil).
+		AddInputField(currentLang["form_comment"], connection.Comment, 30, nil, nil).
+		AddButton(currentLang["btn_save"], func() {
 			server := form.GetFormItem(0).(*tview.InputField).GetText()
 			port := form.GetFormItem(1).(*tview.InputField).GetText()
 			comment := form.GetFormItem(2).(*tview.InputField).GetText()
 
 			if server == "" {
-				errorText.SetText("Введите адрес сервера")
+				errorText.SetText(currentLang["msg_enter_server"])
 				return
 			}
 			if comment == "" {
-				errorText.SetText("Введите комментарий")
+				errorText.SetText(currentLang["msg_enter_comment"])
 				return
 			}
 
@@ -320,7 +326,7 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 				app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
 			}
 		}).
-		AddButton("Отмена", func() {
+		AddButton(currentLang["btn_cancel"], func() {
 			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
 		})
 
@@ -329,7 +335,7 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 		AddItem(form, 0, 1, true).
 		AddItem(errorText, 1, 0, false)
 
-	formFlex.SetBorder(true).SetTitle("Редактировать соединение").SetTitleAlign(tview.AlignLeft)
+	formFlex.SetBorder(true).SetTitle(currentLang["title_edit"]).SetTitleAlign(tview.AlignLeft)
 	app.SetRoot(centerWidget(formFlex), true)
 }
 
@@ -341,21 +347,21 @@ func showContextMenu(app *tview.Application, connectionsList *tview.List, index 
 
 	server := sshConnections[index].Server
 	contextMenu := tview.NewList().
-		AddItem("Подключить", "", 0, func() {
+		AddItem(currentLang["ctx_connect"], "", 0, func() {
 			showMessage(app, connectionsList, server)
 		}).
-		AddItem("Редактировать", "", 0, func() {
+		AddItem(currentLang["ctx_edit"], "", 0, func() {
 			editConnection(app, connectionsList, index)
 		}).
-		AddItem("Отмена", "", 0, func() {
+		AddItem(currentLang["ctx_cancel"], "", 0, func() {
 			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
 		})
 
 	contextMenu.SetBorder(true).
-		SetTitle(fmt.Sprintf("Действия для %s", server)).
+		SetTitle(fmt.Sprintf(currentLang["ctx_actions"], server)).
 		SetTitleAlign(tview.AlignLeft)
 
-	// Создаем flex с фиксированной высотой для контекстного меню
+	// Create flex with fixed height for context menu
 	menuFlex := tview.NewFlex().
 		SetDirection(tview.FlexRow).
 		AddItem(nil, 0, 1, false).
@@ -363,6 +369,22 @@ func showContextMenu(app *tview.Application, connectionsList *tview.List, index 
 		AddItem(nil, 0, 1, false)
 
 	app.SetRoot(centerWidget(menuFlex), true)
+}
+
+// Add language switching function
+func switchLanguage(app *tview.Application, connectionsList *tview.List) {
+	modal := tview.NewModal().
+		SetText("Select language / Выберите язык").
+		AddButtons([]string{"English", "Русский"}).
+		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			if buttonLabel == "English" {
+				currentLang = lang.EN
+			} else {
+				currentLang = lang.RU
+			}
+			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+		})
+	app.SetRoot(centerWidget(modal), true)
 }
 
 // main initializes and runs the SSH connection manager application
@@ -375,21 +397,21 @@ func main() {
 
 	// Create connections list
 	connectionsList := tview.NewList().ShowSecondaryText(false)
-	connectionsList.SetTitle("Соединения").SetBorder(true).SetTitleAlign(tview.AlignLeft)
+	connectionsList.SetTitle(currentLang["connections_title"]).SetBorder(true).SetTitleAlign(tview.AlignLeft)
 
 	// Create menu
 	menuList = tview.NewList().ShowSecondaryText(false)
-	menuList.SetTitle("Меню").SetBorder(true).SetTitleAlign(tview.AlignLeft)
+	menuList.SetTitle(currentLang["menu_title"]).SetBorder(true).SetTitleAlign(tview.AlignLeft)
 
 	// Add existing connections
 	if len(sshConnections) == 0 {
-		connectionsList.AddItem("No saved connections", "", 0, nil)
+		connectionsList.AddItem(currentLang["msg_no_connections"], "", 0, nil)
 	} else {
 		for _, conn := range sshConnections {
 			server := conn.Server
 			comment := conn.Comment
 			connectionsList.AddItem(fmt.Sprintf("%s - %s", server, comment), "", 0, func() {
-				// При нажатии Enter показываем контекстное меню
+				// On Enter press show context menu
 				//showContextMenu(app, connectionsList, index)
 				showMessage(app, connectionsList, server)
 			})
@@ -397,67 +419,44 @@ func main() {
 	}
 
 	// Add menu items
-	menuList.AddItem("Add connection", "", 0, func() {
+	menuList.AddItem(currentLang["menu_add"], "", 0, func() {
 		addConnection(app, connectionsList)
 	})
-	menuList.AddItem("Редактировать конфиг", "", 0, func() {
+	menuList.AddItem(currentLang["menu_language"], "", 0, func() {
+		switchLanguage(app, connectionsList)
+	})
+	menuList.AddItem(currentLang["menu_edit_config"], "", 0, func() {
 		openConfig()
 	})
-	menuList.AddItem("Выход", "", 0, func() {
+	menuList.AddItem(currentLang["menu_exit"], "", 0, func() {
 		app.Stop()
 	})
 
 	// Update help text
 	helpText = tview.NewTextView().
-		SetText("Controls:\n" +
-			"↑↓ - Navigate list\n" +
-			"Enter - Connect\n" +
-			"Ctrl+E - Edit connection\n" +
-			"Ctrl+N - Add connection\n" +
-			"Del - Delete connection\n" +
-			"Ctrl+C - Exit").
+		SetText(currentLang["help_text"]).
 		SetTextAlign(tview.AlignLeft)
-	helpText.SetBorder(true).SetTitle("Помощь").SetTitleAlign(tview.AlignLeft)
 
-	// Устанавливаем фиксированную высоту терминала
-	const screenHeight = 80
-
-	// Вычисляем высоту меню (количество пунктов + рамка)
-	menuHeight := menuList.GetItemCount() + 2
-
-	// Вычисляем высоту справки (количество строк + рамка)
-	helpHeight := 8 // 6 строк текста + рамка сверху и снизу
-
-	// Вычисляем высоту списка соединений
-	connectionsHeight := screenHeight/2 - menuHeight - helpHeight
-
-	// Создаем вертикальный flex для списков и справки
-	tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(connectionsList, connectionsHeight, 0, true).
-		AddItem(menuList, menuHeight, 0, false).
-		AddItem(helpText, helpHeight, 0, false)
-
-	// Устанавливаем свойства прокрутки для списка соединений
+	// Set scrolling properties for connections list
 	connectionsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		// Автоматическая прокрутка при достижении границ видимой области
+		// Auto-scroll when reaching visible area boundaries
 		offset, _ := connectionsList.GetOffset()
 		if index < offset {
 			connectionsList.SetOffset(index, 0)
-		} else if index >= offset+connectionsHeight-2 { // -2 для учета границ
+		} else if index >= offset+connectionsHeight-2 { // -2 for borders
 			connectionsList.SetOffset(index-connectionsHeight+3, 0)
 		}
 	})
 
-	// Центрируем общий контейнер
+	// Center main container
 	flex := centerWidget(createMainLayout(app, connectionsList))
 
-	// Обновляем обработчик клавиш в main()
+	// Update key handler in main()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Получаем текущий активный примитив
+		// Get current active primitive
 		primitive := app.GetFocus()
 
-		// Если активно модальное окно или форма ввода, пропускаем обработку клавиш
+		// If modal window or input form is active, skip key handling
 		if _, ok := primitive.(*tview.Modal); ok {
 			return event
 		}
@@ -470,14 +469,14 @@ func main() {
 			app.Stop()
 		case tcell.KeyDown:
 			if app.GetFocus() == connectionsList {
-				// Если достигли конца списка соединений
+				// If at end of connections list
 				if connectionsList.GetCurrentItem() == connectionsList.GetItemCount()-1 {
 					app.SetFocus(menuList)
 					menuList.SetCurrentItem(0)
 					return nil
 				}
 			} else if app.GetFocus() == menuList {
-				// Если достигли конца меню
+				// If at end of menu
 				if menuList.GetCurrentItem() == menuList.GetItemCount()-1 {
 					app.SetFocus(connectionsList)
 					connectionsList.SetCurrentItem(0)
@@ -486,14 +485,14 @@ func main() {
 			}
 		case tcell.KeyUp:
 			if app.GetFocus() == connectionsList {
-				// Если в начале списка соединений
+				// If at start of connections list
 				if connectionsList.GetCurrentItem() == 0 {
 					app.SetFocus(menuList)
 					menuList.SetCurrentItem(menuList.GetItemCount() - 1)
 					return nil
 				}
 			} else if app.GetFocus() == menuList {
-				// Если в начале меню
+				// If at start of menu
 				if menuList.GetCurrentItem() == 0 {
 					app.SetFocus(connectionsList)
 					connectionsList.SetCurrentItem(connectionsList.GetItemCount() - 1)
@@ -505,10 +504,10 @@ func main() {
 				currentIndex := connectionsList.GetCurrentItem()
 				if currentIndex >= 0 && currentIndex < len(sshConnections) {
 					modal := tview.NewModal().
-						SetText(fmt.Sprintf("Редактировать соединение %s?", sshConnections[currentIndex].Server)).
-						AddButtons([]string{"OK", "Отмена"}).
+						SetText(fmt.Sprintf(currentLang["dlg_edit"], sshConnections[currentIndex].Server)).
+						AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 						SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-							if buttonLabel == "OK" {
+							if buttonLabel == currentLang["btn_ok"] {
 								editConnection(app, connectionsList, currentIndex)
 							} else {
 								lists := tview.NewFlex().
@@ -524,13 +523,13 @@ func main() {
 			}
 			return nil
 		case tcell.KeyCtrlN:
-			// Показываем окно добавления нового соединения
+			// Show add new connection window
 			modal := tview.NewModal().
-				SetText("Добавить новое соединение?").
-				AddButtons([]string{"OK", "Отмена"}).
+				SetText(currentLang["dlg_add"]).
+				AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 					app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
-					if buttonLabel == "OK" {
+					if buttonLabel == currentLang["btn_ok"] {
 						addConnection(app, connectionsList)
 					}
 				})
@@ -545,8 +544,8 @@ func main() {
 		return event
 	})
 
-	// Запуск приложения с flex контейнером
+	// Launch application with flex container
 	if err := app.SetRoot(flex, true).EnableMouse(true).Run(); err != nil {
-		log.Fatalf("Ошибка запуска приложения: %v\n", err)
+		log.Fatalf(currentLang["msg_app_error"], err)
 	}
 }
