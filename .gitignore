@@ -1,4 +1,7 @@
 go.mod
 go.sum
 sshman
+sshmanager
+.DS*
 *.go_ 
+lang/.DS*

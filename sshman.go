@@ -12,10 +12,17 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"sshmanager/lang"
+
 	"github.com/gdamore/tcell/v2"
-	"github.com/mmag/sshmanager/lang"
 	"github.com/rivo/tview"
 )
+
+// Update the config structure by adding a new type
+type Config struct {
+	Connections []SSHConnection `json:"connections"`
+	Language    string          `json:"language"`
+}
 
 type SSHConnection struct {
 	Server  string `json:"server"`
@@ -23,11 +30,15 @@ type SSHConnection struct {
 	Port    string `json:"port"`
 }
 
-var sshConnections []SSHConnection
-var configDir = filepath.Join(os.Getenv("HOME"), "sshman")
-var configFilePath = filepath.Join(configDir, "sshman.json")
-var menuList *tview.List
-var helpText *tview.TextView
+// Update global variables
+var (
+	sshConnections []SSHConnection
+	configDir      = filepath.Join(os.Getenv("HOME"), "sshman")
+	configFilePath = filepath.Join(configDir, "sshman.json")
+	menuList       *tview.List
+	helpText       *tview.TextView
+	config         Config // Add config variable
+)
 
 // Add constants for form dimensions
 const (
@@ -37,7 +48,8 @@ const (
 
 // Add global variables
 var (
-	currentLang = lang.EN // Default language
+	currentLang       = lang.EN // Default language
+	connectionsHeight = 0       // Height of connections list
 )
 
 // createMainLayout creates and returns the main application layout with the specified heights
@@ -51,8 +63,8 @@ func createMainLayout(app *tview.Application, connectionsList *tview.List) *tvie
 
 	// Calculate help height (text lines + border)
 	helpHeight := 8 // 6 text lines + top and bottom borders
-
 	// Calculate connections list height
+	connectionsHeight = screenHeight/2 - menuHeight - helpHeight
 	connectionsHeight := screenHeight/2 - menuHeight - helpHeight
 
 	// Create vertical flex for lists and help text
@@ -195,16 +207,21 @@ func saveConnections() {
 		return
 	}
 
-	// Use MarshalIndent instead of Marshal for formatted output
-	data, err := json.MarshalIndent(sshConnections, "", "    ")
+	// Update config before saving
+	config.Connections = sshConnections
+	config.Language = "en"
+	if currentLang["language_code"] == "ru" {
+		config.Language = "ru"
+	}
+
+	// Use MarshalIndent for formatted output
+	data, err := json.MarshalIndent(config, "", "    ")
 	if err != nil {
 		log.Printf(currentLang["msg_save_error"], err)
 		return
 	}
 
-	// Add newline at end of file
 	data = append(data, '\n')
-
 	err = ioutil.WriteFile(configFilePath, data, 0644)
 	if err != nil {
 		log.Printf(currentLang["msg_write_error"], err)
@@ -221,9 +238,21 @@ func loadConnections() {
 		}
 		return
 	}
-	err = json.Unmarshal(data, &sshConnections)
+
+	err = json.Unmarshal(data, &config)
 	if err != nil {
 		log.Printf(currentLang["msg_parse_error"], err)
+		return
+	}
+
+	// Set connections from config
+	sshConnections = config.Connections
+
+	// Set language from config
+	if config.Language == "ru" {
+		currentLang = lang.RU
+	} else {
+		currentLang = lang.EN
 	}
 }
 
@@ -382,6 +411,30 @@ func switchLanguage(app *tview.Application, connectionsList *tview.List) {
 			} else {
 				currentLang = lang.RU
 			}
+
+			// Update UI with new language
+			connectionsList.SetTitle(currentLang["connections_title"])
+			menuList.SetTitle(currentLang["menu_title"])
+			helpText.SetText(currentLang["help_text"])
+
+			// Update menu items
+			menuList.Clear()
+			menuList.AddItem(currentLang["menu_add"], "", 0, func() {
+				addConnection(app, connectionsList)
+			})
+			menuList.AddItem(currentLang["menu_language"], "", 0, func() {
+				switchLanguage(app, connectionsList)
+			})
+			menuList.AddItem(currentLang["menu_edit_config"], "", 0, func() {
+				openConfig()
+			})
+			menuList.AddItem(currentLang["menu_exit"], "", 0, func() {
+				app.Stop()
+			})
+
+			// Save config with new language
+			saveConnections()
+
 			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
 		})
 	app.SetRoot(centerWidget(modal), true)
