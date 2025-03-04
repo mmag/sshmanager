@@ -1,4 +1,4 @@
-# SSHman - SSH Connection Manager
+# SSHman - command line SSH Connection Manager with TUI interface
 
 A terminal-based SSH connection manager written in Go using [tview](https://github.com/rivo/tview).
 
