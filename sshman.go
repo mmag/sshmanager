@@ -6,13 +6,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
-	"sshmanager/lang"
+	"sshman/lang"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
@@ -25,9 +25,10 @@ type Config struct {
 }
 
 type SSHConnection struct {
-	Server  string `json:"server"`
-	Comment string `json:"comment"`
-	Port    string `json:"port"`
+	Server   string `json:"server"`
+	Comment  string `json:"comment"`
+	Port     string `json:"port"`
+	Username string `json:"username,omitempty"`
 }
 
 // Update global variables
@@ -40,31 +41,28 @@ var (
 	config         Config // Add config variable
 )
 
-// Add constants for form dimensions
+// Add constants for dimensions
 const (
-	formWidth  = 100 // increase width for better readability
-	formHeight = 60  // decrease height for compactness
+	formWidth     = 100 // increase width for better readability
+	formHeight    = 60  // decrease height for compactness
+	screenHeight  = 80  // Fixed terminal height
+	contextHeight = 6   // Context menu height
 )
 
 // Add global variables
 var (
-	currentLang       = lang.EN // Default language
-	connectionsHeight = 0       // Height of connections list
+	currentLang = lang.EN // Default language
 )
 
 // createMainLayout creates and returns the main application layout with the specified heights
 // for connections list, menu, and help sections based on screen height
 func createMainLayout(app *tview.Application, connectionsList *tview.List) *tview.Flex {
-	// Set fixed terminal height
-	const screenHeight = 80
-
 	// Calculate menu height (items count + border)
 	menuHeight := menuList.GetItemCount() + 2
 
 	// Calculate help height (text lines + border)
 	helpHeight := 8 // 6 text lines + top and bottom borders
 	// Calculate connections list height
-	connectionsHeight = screenHeight/2 - menuHeight - helpHeight
 	connectionsHeight := screenHeight/2 - menuHeight - helpHeight
 
 	// Create vertical flex for lists and help text
@@ -89,8 +87,14 @@ func sshConnect(server string) {
 	if connection.Port != "" {
 		sshCommand = fmt.Sprintf("ssh -p %s", connection.Port)
 	}
+	
+	// Build the target with username if provided
+	target := connection.Server
+	if connection.Username != "" {
+		target = fmt.Sprintf("%s@%s", connection.Username, connection.Server)
+	}
 
-	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s %s", sshCommand, connection.Server))
+	cmd := exec.Command("sh", "-c", fmt.Sprintf("%s %s", sshCommand, target))
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -102,10 +106,37 @@ func sshConnect(server string) {
 	}
 }
 
+// formatConnectionLine formats connection info with dots between address and description
+func formatConnectionLine(conn SSHConnection) string {
+	// Build server address with port and username if needed
+	serverPart := conn.Server
+	if conn.Port != "" && conn.Port != "22" {
+		serverPart = fmt.Sprintf("%s:%s", conn.Server, conn.Port)
+	}
+	if conn.Username != "" {
+		serverPart = fmt.Sprintf("%s@%s", conn.Username, serverPart)
+	}
+	
+	// Calculate available width - experimentally determined to fit the list width
+	totalWidth := formWidth - 4
+	serverLen := len(serverPart)
+	commentLen := len(conn.Comment)
+	
+	// If both parts fit with at least 3 dots, use dots
+	if serverLen + commentLen + 3 <= totalWidth {
+		dotsCount := totalWidth - serverLen - commentLen
+		dots := strings.Repeat(".", dotsCount)
+		return fmt.Sprintf(" %s%s%s ", serverPart, dots, conn.Comment)
+	}
+	
+	// If too long, just use simple format
+	return fmt.Sprintf("%s - %s", serverPart, conn.Comment)
+}
+
 // centerWidget centers the provided widget in the screen with specified form dimensions
 func centerWidget(widget tview.Primitive) *tview.Flex {
 	widget.SetRect(0, 0, formWidth, formHeight)
-	return tview.NewFlex().
+	flex := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).
@@ -113,6 +144,8 @@ func centerWidget(widget tview.Primitive) *tview.Flex {
 			AddItem(widget, formHeight, 0, true).
 			AddItem(nil, 0, 1, false), formWidth, 0, true).
 		AddItem(nil, 0, 1, false)
+	flex.SetBackgroundColor(tcell.ColorNavy)
+	return flex
 }
 
 // isConnectionExists checks if a connection with the given server address already exists
@@ -131,7 +164,16 @@ func isConnectionExists(server string) bool {
 func addConnection(app *tview.Application, connectionsList *tview.List) {
 	var form *tview.Form
 	errorText := tview.NewTextView().SetText("")
-	form = tview.NewForm().
+	errorText.SetTextColor(tcell.ColorYellow).SetBackgroundColor(tcell.ColorNavy)
+	form = tview.NewForm()
+	form.SetBackgroundColor(tcell.ColorNavy)
+	form.SetFieldBackgroundColor(tcell.ColorDarkBlue)
+	form.SetFieldTextColor(tcell.ColorWhite)
+	form.SetLabelColor(tcell.ColorWhite)
+	form.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	form.SetButtonTextColor(tcell.ColorWhite)
+	
+	form.
 		AddInputField(currentLang["form_server"], "", 30, nil, func(text string) {
 			if text == "" {
 				return
@@ -144,10 +186,12 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 		}).
 		AddInputField(currentLang["form_port"], "", 5, nil, nil).
 		AddInputField(currentLang["form_comment"], "", 30, nil, nil).
+		AddInputField(currentLang["form_username"], "", 20, nil, nil).
 		AddButton(currentLang["btn_save"], func() {
 			server := form.GetFormItem(0).(*tview.InputField).GetText()
 			port := form.GetFormItem(1).(*tview.InputField).GetText()
 			comment := form.GetFormItem(2).(*tview.InputField).GetText()
+			username := form.GetFormItem(3).(*tview.InputField).GetText()
 
 			if server == "" {
 				errorText.SetText(currentLang["msg_enter_server"])
@@ -159,7 +203,7 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 			}
 
 			if !isConnectionExists(server) {
-				connection := SSHConnection{Server: server, Port: port, Comment: comment}
+				connection := SSHConnection{Server: server, Port: port, Comment: comment, Username: username}
 				sshConnections = append(sshConnections, connection)
 
 				// Add new item
@@ -169,7 +213,10 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 					connectionsList.Clear()
 					newIndex = 0
 				}
-				connectionsList.AddItem(fmt.Sprintf("%s - %s", server, comment), "", 0, func() {
+				// Format with dots
+				newConn := SSHConnection{Server: server, Port: port, Comment: comment, Username: username}
+				displayText := formatConnectionLine(newConn)
+				connectionsList.AddItem(displayText, "", 0, func() {
 					showMessage(app, connectionsList, server)
 				})
 				saveConnections()
@@ -191,7 +238,10 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 
 	formFlex.SetBorder(true).
 		SetTitle(currentLang["title_add"]).
-		SetTitleAlign(tview.AlignLeft)
+		SetTitleAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorNavy).
+		SetBorderColor(tcell.ColorWhite).
+		SetTitleColor(tcell.ColorWhite)
 
 	// Set form as active widget
 	app.SetRoot(centerWidget(formFlex), true)
@@ -222,7 +272,7 @@ func saveConnections() {
 	}
 
 	data = append(data, '\n')
-	err = ioutil.WriteFile(configFilePath, data, 0644)
+	err = os.WriteFile(configFilePath, data, 0644)
 	if err != nil {
 		log.Printf(currentLang["msg_write_error"], err)
 	}
@@ -231,7 +281,7 @@ func saveConnections() {
 // loadConnections reads and parses the SSH connections from the configuration file
 // Silently handles the case when the config file doesn't exist
 func loadConnections() {
-	data, err := ioutil.ReadFile(configFilePath)
+	data, err := os.ReadFile(configFilePath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			log.Printf(currentLang["msg_read_error"], err)
@@ -259,7 +309,12 @@ func loadConnections() {
 // showMessage displays a confirmation dialog before establishing an SSH connection
 // Suspends the application while the SSH connection is active
 func showMessage(app *tview.Application, list *tview.List, server string) {
-	modal := tview.NewModal().
+	modal := tview.NewModal()
+	modal.SetBackgroundColor(tcell.ColorNavy)
+	modal.SetTextColor(tcell.ColorWhite)
+	modal.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	modal.SetButtonTextColor(tcell.ColorWhite)
+	modal.
 		SetText(fmt.Sprintf(currentLang["dlg_connect"], server)).
 		AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -290,7 +345,12 @@ func deleteConnection(app *tview.Application, list *tview.List, index int) {
 	}
 
 	server := sshConnections[index].Server
-	modal := tview.NewModal().
+	modal := tview.NewModal()
+	modal.SetBackgroundColor(tcell.ColorNavy)
+	modal.SetTextColor(tcell.ColorWhite)
+	modal.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	modal.SetButtonTextColor(tcell.ColorWhite)
+	modal.
 		SetText(fmt.Sprintf(currentLang["dlg_delete"], server)).
 		AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -317,7 +377,16 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 	connection := sshConnections[index]
 	var form *tview.Form
 	errorText := tview.NewTextView().SetText("")
-	form = tview.NewForm().
+	errorText.SetTextColor(tcell.ColorYellow).SetBackgroundColor(tcell.ColorNavy)
+	form = tview.NewForm()
+	form.SetBackgroundColor(tcell.ColorNavy)
+	form.SetFieldBackgroundColor(tcell.ColorDarkBlue)
+	form.SetFieldTextColor(tcell.ColorWhite)
+	form.SetLabelColor(tcell.ColorWhite)
+	form.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	form.SetButtonTextColor(tcell.ColorWhite)
+	
+	form.
 		AddInputField(currentLang["form_server"], connection.Server, 30, nil, func(text string) {
 			if text == "" {
 				return
@@ -330,10 +399,12 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 		}).
 		AddInputField(currentLang["form_port"], connection.Port, 5, nil, nil).
 		AddInputField(currentLang["form_comment"], connection.Comment, 30, nil, nil).
+		AddInputField(currentLang["form_username"], connection.Username, 20, nil, nil).
 		AddButton(currentLang["btn_save"], func() {
 			server := form.GetFormItem(0).(*tview.InputField).GetText()
 			port := form.GetFormItem(1).(*tview.InputField).GetText()
 			comment := form.GetFormItem(2).(*tview.InputField).GetText()
+			username := form.GetFormItem(3).(*tview.InputField).GetText()
 
 			if server == "" {
 				errorText.SetText(currentLang["msg_enter_server"])
@@ -345,10 +416,12 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 			}
 
 			if server == connection.Server || !isConnectionExists(server) {
-				sshConnections[index] = SSHConnection{Server: server, Port: port, Comment: comment}
+				updatedConn := SSHConnection{Server: server, Port: port, Comment: comment, Username: username}
+				sshConnections[index] = updatedConn
 				connectionsList.RemoveItem(index)
-				connectionsList.InsertItem(index, fmt.Sprintf("%s - %s", server, comment), "", 0, func() {
-					//showContextMenu(app, connectionsList, index)
+				// Format with dots
+				displayText := formatConnectionLine(updatedConn)
+				connectionsList.InsertItem(index, displayText, "", 0, func() {
 					showMessage(app, connectionsList, server)
 				})
 				saveConnections()
@@ -364,45 +437,24 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 		AddItem(form, 0, 1, true).
 		AddItem(errorText, 1, 0, false)
 
-	formFlex.SetBorder(true).SetTitle(currentLang["title_edit"]).SetTitleAlign(tview.AlignLeft)
+	formFlex.SetBorder(true).
+		SetTitle(currentLang["title_edit"]).
+		SetTitleAlign(tview.AlignLeft).
+		SetBackgroundColor(tcell.ColorNavy).
+		SetBorderColor(tcell.ColorWhite).
+		SetTitleColor(tcell.ColorWhite)
 	app.SetRoot(centerWidget(formFlex), true)
 }
 
-// Добавим функцию для отображения контекстного меню
-func showContextMenu(app *tview.Application, connectionsList *tview.List, index int) {
-	if index < 0 || index >= len(sshConnections) {
-		return
-	}
-
-	server := sshConnections[index].Server
-	contextMenu := tview.NewList().
-		AddItem(currentLang["ctx_connect"], "", 0, func() {
-			showMessage(app, connectionsList, server)
-		}).
-		AddItem(currentLang["ctx_edit"], "", 0, func() {
-			editConnection(app, connectionsList, index)
-		}).
-		AddItem(currentLang["ctx_cancel"], "", 0, func() {
-			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
-		})
-
-	contextMenu.SetBorder(true).
-		SetTitle(fmt.Sprintf(currentLang["ctx_actions"], server)).
-		SetTitleAlign(tview.AlignLeft)
-
-	// Create flex with fixed height for context menu
-	menuFlex := tview.NewFlex().
-		SetDirection(tview.FlexRow).
-		AddItem(nil, 0, 1, false).
-		AddItem(contextMenu, 6, 0, true). // Устанавливаем высоту 6 строк
-		AddItem(nil, 0, 1, false)
-
-	app.SetRoot(centerWidget(menuFlex), true)
-}
 
 // Add language switching function
 func switchLanguage(app *tview.Application, connectionsList *tview.List) {
-	modal := tview.NewModal().
+	modal := tview.NewModal()
+	modal.SetBackgroundColor(tcell.ColorNavy)
+	modal.SetTextColor(tcell.ColorWhite)
+	modal.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	modal.SetButtonTextColor(tcell.ColorWhite)
+	modal.
 		SetText("Select language / Выберите язык").
 		AddButtons([]string{"English", "Русский"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -419,16 +471,16 @@ func switchLanguage(app *tview.Application, connectionsList *tview.List) {
 
 			// Update menu items
 			menuList.Clear()
-			menuList.AddItem(currentLang["menu_add"], "", 0, func() {
+			menuList.AddItem(" "+currentLang["menu_add"], "", 0, func() {
 				addConnection(app, connectionsList)
 			})
-			menuList.AddItem(currentLang["menu_language"], "", 0, func() {
+			menuList.AddItem(" "+currentLang["menu_language"], "", 0, func() {
 				switchLanguage(app, connectionsList)
 			})
-			menuList.AddItem(currentLang["menu_edit_config"], "", 0, func() {
+			menuList.AddItem(" "+currentLang["menu_edit_config"], "", 0, func() {
 				openConfig()
 			})
-			menuList.AddItem(currentLang["menu_exit"], "", 0, func() {
+			menuList.AddItem(" "+currentLang["menu_exit"], "", 0, func() {
 				app.Stop()
 			})
 
@@ -440,10 +492,28 @@ func switchLanguage(app *tview.Application, connectionsList *tview.List) {
 	app.SetRoot(centerWidget(modal), true)
 }
 
+// setupDebianTheme configures the Debian installer color scheme
+func setupDebianTheme() {
+	tview.Styles.PrimitiveBackgroundColor = tcell.ColorNavy
+	tview.Styles.ContrastBackgroundColor = tcell.ColorDarkRed
+	tview.Styles.MoreContrastBackgroundColor = tcell.ColorRed
+	tview.Styles.BorderColor = tcell.ColorWhite
+	tview.Styles.TitleColor = tcell.ColorWhite
+	tview.Styles.GraphicsColor = tcell.ColorWhite
+	tview.Styles.PrimaryTextColor = tcell.ColorWhite
+	tview.Styles.SecondaryTextColor = tcell.ColorLightGray
+	tview.Styles.TertiaryTextColor = tcell.ColorGreen
+	tview.Styles.InverseTextColor = tcell.ColorBlack
+	tview.Styles.ContrastSecondaryTextColor = tcell.ColorWhite
+}
+
 // main initializes and runs the SSH connection manager application
 // Sets up the UI, loads configuration and handles user input
 func main() {
 	app := tview.NewApplication()
+	
+	// Apply Debian installer theme
+	setupDebianTheme()
 
 	// Load connections from file
 	loadConnections()
@@ -451,37 +521,44 @@ func main() {
 	// Create connections list
 	connectionsList := tview.NewList().ShowSecondaryText(false)
 	connectionsList.SetTitle(currentLang["connections_title"]).SetBorder(true).SetTitleAlign(tview.AlignLeft)
+	connectionsList.SetBackgroundColor(tcell.ColorNavy)
+	connectionsList.SetMainTextColor(tcell.ColorWhite)
+	connectionsList.SetSelectedTextColor(tcell.ColorWhite)
+	connectionsList.SetSelectedBackgroundColor(tcell.ColorDarkRed)
 
 	// Create menu
 	menuList = tview.NewList().ShowSecondaryText(false)
 	menuList.SetTitle(currentLang["menu_title"]).SetBorder(true).SetTitleAlign(tview.AlignLeft)
+	menuList.SetBackgroundColor(tcell.ColorNavy)
+	menuList.SetMainTextColor(tcell.ColorWhite)
+	menuList.SetSelectedTextColor(tcell.ColorWhite)
+	menuList.SetSelectedBackgroundColor(tcell.ColorDarkRed)
 
 	// Add existing connections
 	if len(sshConnections) == 0 {
 		connectionsList.AddItem(currentLang["msg_no_connections"], "", 0, nil)
 	} else {
-		for _, conn := range sshConnections {
-			server := conn.Server
-			comment := conn.Comment
-			connectionsList.AddItem(fmt.Sprintf("%s - %s", server, comment), "", 0, func() {
-				// On Enter press show context menu
-				//showContextMenu(app, connectionsList, index)
-				showMessage(app, connectionsList, server)
+		for i, conn := range sshConnections {
+			index := i // Capture index to avoid closure issue
+			displayText := formatConnectionLine(conn)
+			connectionsList.AddItem(displayText, "", 0, func() {
+				currentIndex := index
+				showMessage(app, connectionsList, sshConnections[currentIndex].Server)
 			})
 		}
 	}
 
-	// Add menu items
-	menuList.AddItem(currentLang["menu_add"], "", 0, func() {
+	// Add menu items with left padding
+	menuList.AddItem(" "+currentLang["menu_add"], "", 0, func() {
 		addConnection(app, connectionsList)
 	})
-	menuList.AddItem(currentLang["menu_language"], "", 0, func() {
+	menuList.AddItem(" "+currentLang["menu_language"], "", 0, func() {
 		switchLanguage(app, connectionsList)
 	})
-	menuList.AddItem(currentLang["menu_edit_config"], "", 0, func() {
+	menuList.AddItem(" "+currentLang["menu_edit_config"], "", 0, func() {
 		openConfig()
 	})
-	menuList.AddItem(currentLang["menu_exit"], "", 0, func() {
+	menuList.AddItem(" "+currentLang["menu_exit"], "", 0, func() {
 		app.Stop()
 	})
 
@@ -489,16 +566,50 @@ func main() {
 	helpText = tview.NewTextView().
 		SetText(currentLang["help_text"]).
 		SetTextAlign(tview.AlignLeft)
+	helpText.SetBackgroundColor(tcell.ColorNavy)
+	helpText.SetTextColor(tcell.ColorWhite)
+	helpText.SetBorderColor(tcell.ColorWhite)
 
 	// Set scrolling properties for connections list
 	connectionsList.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
 		// Auto-scroll when reaching visible area boundaries
+		// Get current connections list height
+		_, _, _, listHeight := connectionsList.GetInnerRect()
+		visibleItems := listHeight
+		
 		offset, _ := connectionsList.GetOffset()
 		if index < offset {
 			connectionsList.SetOffset(index, 0)
-		} else if index >= offset+connectionsHeight-2 { // -2 for borders
-			connectionsList.SetOffset(index-connectionsHeight+3, 0)
+		} else if index >= offset+visibleItems {
+			connectionsList.SetOffset(index-visibleItems+1, 0)
 		}
+	})
+
+	// Add focus change handlers to manage selection colors
+	connectionsList.SetFocusFunc(func() {
+		if connectionsList.GetItemCount() > 0 && connectionsList.GetCurrentItem() < 0 {
+			connectionsList.SetCurrentItem(0)
+		}
+		// Active colors - red background
+		connectionsList.SetSelectedTextColor(tcell.ColorWhite)
+		connectionsList.SetSelectedBackgroundColor(tcell.ColorDarkRed)
+		
+		// Make menu inactive - same color as background
+		menuList.SetSelectedTextColor(tcell.ColorWhite)
+		menuList.SetSelectedBackgroundColor(tcell.ColorNavy)
+	})
+
+	menuList.SetFocusFunc(func() {
+		if menuList.GetItemCount() > 0 && menuList.GetCurrentItem() < 0 {
+			menuList.SetCurrentItem(0)
+		}
+		// Active colors - red background
+		menuList.SetSelectedTextColor(tcell.ColorWhite)
+		menuList.SetSelectedBackgroundColor(tcell.ColorDarkRed)
+		
+		// Make connections list inactive - same color as background
+		connectionsList.SetSelectedTextColor(tcell.ColorWhite)
+		connectionsList.SetSelectedBackgroundColor(tcell.ColorNavy)
 	})
 
 	// Center main container
@@ -516,39 +627,54 @@ func main() {
 		if _, ok := primitive.(*tview.InputField); ok {
 			return event
 		}
+		if _, ok := primitive.(*tview.Form); ok {
+			return event
+		}
+
+		// Only handle Tab for main lists, not for forms
+		if event.Key() == tcell.KeyTab {
+			// Check if we're in the main interface (connectionsList or menuList have focus)
+			if app.GetFocus() != connectionsList && app.GetFocus() != menuList {
+				return event
+			}
+		}
 
 		switch event.Key() {
 		case tcell.KeyCtrlC:
 			app.Stop()
+		case tcell.KeyTab:
+			// Switch between lists
+			if app.GetFocus() == connectionsList {
+				app.SetFocus(menuList)
+			} else {
+				app.SetFocus(connectionsList)
+			}
+			return nil
 		case tcell.KeyDown:
 			if app.GetFocus() == connectionsList {
-				// If at end of connections list
+				// Wrap around at the end
 				if connectionsList.GetCurrentItem() == connectionsList.GetItemCount()-1 {
-					app.SetFocus(menuList)
-					menuList.SetCurrentItem(0)
+					connectionsList.SetCurrentItem(0)
 					return nil
 				}
 			} else if app.GetFocus() == menuList {
-				// If at end of menu
+				// Wrap around at the end
 				if menuList.GetCurrentItem() == menuList.GetItemCount()-1 {
-					app.SetFocus(connectionsList)
-					connectionsList.SetCurrentItem(0)
+					menuList.SetCurrentItem(0)
 					return nil
 				}
 			}
 		case tcell.KeyUp:
 			if app.GetFocus() == connectionsList {
-				// If at start of connections list
+				// Wrap around at the beginning
 				if connectionsList.GetCurrentItem() == 0 {
-					app.SetFocus(menuList)
-					menuList.SetCurrentItem(menuList.GetItemCount() - 1)
+					connectionsList.SetCurrentItem(connectionsList.GetItemCount() - 1)
 					return nil
 				}
 			} else if app.GetFocus() == menuList {
-				// If at start of menu
+				// Wrap around at the beginning
 				if menuList.GetCurrentItem() == 0 {
-					app.SetFocus(connectionsList)
-					connectionsList.SetCurrentItem(connectionsList.GetItemCount() - 1)
+					menuList.SetCurrentItem(menuList.GetItemCount() - 1)
 					return nil
 				}
 			}
@@ -556,7 +682,12 @@ func main() {
 			if app.GetFocus() == connectionsList && connectionsList.GetItemCount() > 0 {
 				currentIndex := connectionsList.GetCurrentItem()
 				if currentIndex >= 0 && currentIndex < len(sshConnections) {
-					modal := tview.NewModal().
+					modal := tview.NewModal()
+	modal.SetBackgroundColor(tcell.ColorNavy)
+	modal.SetTextColor(tcell.ColorWhite)
+	modal.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	modal.SetButtonTextColor(tcell.ColorWhite)
+	modal.
 						SetText(fmt.Sprintf(currentLang["dlg_edit"], sshConnections[currentIndex].Server)).
 						AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 						SetDoneFunc(func(buttonIndex int, buttonLabel string) {
@@ -577,7 +708,12 @@ func main() {
 			return nil
 		case tcell.KeyCtrlN:
 			// Show add new connection window
-			modal := tview.NewModal().
+			modal := tview.NewModal()
+	modal.SetBackgroundColor(tcell.ColorNavy)
+	modal.SetTextColor(tcell.ColorWhite)
+	modal.SetButtonBackgroundColor(tcell.ColorDarkRed)
+	modal.SetButtonTextColor(tcell.ColorWhite)
+	modal.
 				SetText(currentLang["dlg_add"]).
 				AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
