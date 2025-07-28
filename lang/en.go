@@ -15,11 +15,12 @@ var EN = map[string]string{
 	"btn_save":   "Save",
 
 	// Forms
-	"form_server":  "SSH server",
-	"form_port":    "Port",
-	"form_comment": "Comment",
-	"title_add":    "Add connection",
-	"title_edit":   "Edit connection",
+	"form_server":   "SSH server",
+	"form_port":     "Port",
+	"form_comment":  "Comment",
+	"form_username": "Username",
+	"title_add":     "Add connection",
+	"title_edit":    "Edit connection",
 
 	// Messages
 	"msg_no_connections": "No saved connections",
@@ -42,7 +43,7 @@ var EN = map[string]string{
 	"ctx_actions": "Actions for %s",
 
 	// Help text
-	"help_text": "Controls:\n↑↓ - Navigate list\nEnter - Connect\nCtrl+E - Edit connection\nCtrl+N - Add connection\nDel - Delete connection\nCtrl+C - Exit",
+	"help_text": " Controls:\n ↑↓ - Navigate list\n Tab - Switch section\n Enter - Connect\n Ctrl+E - Edit connection\n Ctrl+N - Add connection\n Del - Delete connection\n Ctrl+C - Exit",
 
 	// Error messages
 	"msg_config_dir_error":  "Error creating config directory: %v\n",
@@ -52,4 +53,7 @@ var EN = map[string]string{
 	"msg_parse_error":       "Error parsing file: %v\n",
 	"msg_config_open_error": "Error opening config: %v\n",
 	"msg_app_error":         "Application error: %v\n",
+	
+	// Language code
+	"language_code": "en",
 }

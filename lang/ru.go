@@ -15,11 +15,12 @@ var RU = map[string]string{
 	"btn_save":   "Сохранить",
 
 	// Forms
-	"form_server":  "SSH сервер",
-	"form_port":    "Порт",
-	"form_comment": "Комментарий",
-	"title_add":    "Добавить соединение",
-	"title_edit":   "Редактировать соединение",
+	"form_server":   "SSH сервер",
+	"form_port":     "Порт",
+	"form_comment":  "Комментарий",
+	"form_username": "Имя пользователя",
+	"title_add":     "Добавить соединение",
+	"title_edit":    "Редактировать соединение",
 
 	// Messages
 	"msg_no_connections": "Нет сохраненных соединений",
@@ -42,7 +43,7 @@ var RU = map[string]string{
 	"ctx_actions": "Действия для %s",
 
 	// Help text
-	"help_text": "Управление:\n↑↓ - Навигация по списку\nEnter - Подключиться\nCtrl+E - Редактировать соединение\nCtrl+N - Добавить соединение\nDel - Удалить соединение\nCtrl+C - Выход",
+	"help_text": " Управление:\n ↑↓ - Навигация по списку\n Tab - Переключить раздел\n Enter - Подключиться\n Ctrl+E - Редактировать соединение\n Ctrl+N - Добавить соединение\n Del - Удалить соединение\n Ctrl+C - Выход",
 
 	// Error messages
 	"msg_config_dir_error":  "Ошибка создания директории конфигурации: %v\n",
@@ -52,4 +53,7 @@ var RU = map[string]string{
 	"msg_parse_error":       "Ошибка разбора файла: %v\n",
 	"msg_config_open_error": "Ошибка открытия конфига: %v\n",
 	"msg_app_error":         "Ошибка запуска приложения: %v\n",
+	
+	// Language code
+	"language_code": "ru",
 }
