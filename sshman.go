@@ -45,7 +45,6 @@ var (
 const (
 	formWidth     = 100 // increase width for better readability
 	formHeight    = 60  // decrease height for compactness
-	screenHeight  = 80  // Fixed terminal height
 	contextHeight = 6   // Context menu height
 )
 
@@ -62,8 +61,8 @@ func createMainLayout(app *tview.Application, connectionsList *tview.List) *tvie
 
 	// Calculate help height (text lines + border)
 	helpHeight := 8 // 6 text lines + top and bottom borders
-	// Calculate connections list height
-	connectionsHeight := screenHeight/2 - menuHeight - helpHeight
+	// Calculate connections list height (number of connections + 1 + border)
+	connectionsHeight := len(sshConnections) + 3 // +1 for extra row, +2 for borders
 
 	// Create vertical flex for lists and help text
 	return tview.NewFlex().
@@ -133,16 +132,37 @@ func formatConnectionLine(conn SSHConnection) string {
 	return fmt.Sprintf("%s - %s", serverPart, conn.Comment)
 }
 
-// centerWidget centers the provided widget in the screen with specified form dimensions
-func centerWidget(widget tview.Primitive) *tview.Flex {
-	widget.SetRect(0, 0, formWidth, formHeight)
+// centerWidget centers the provided widget in the screen with dynamic dimensions
+func centerWidget(app *tview.Application, widget tview.Primitive) *tview.Flex {
+	// Use reasonable defaults for screen size
+	// tview will handle actual centering based on current terminal size
+	screenWidth, screenHeight := 120, 40
+	
+	// Calculate widget dimensions based on screen size
+	widgetWidth := formWidth
+	if screenWidth < formWidth {
+		widgetWidth = screenWidth - 4 // Leave some margin
+	}
+	
+	// Calculate total height needed for layout
+	menuHeight := menuList.GetItemCount() + 2
+	helpHeight := 8
+	connectionsHeight := len(sshConnections) + 3
+	totalHeight := menuHeight + helpHeight + connectionsHeight
+	
+	widgetHeight := totalHeight
+	if screenHeight < totalHeight {
+		widgetHeight = screenHeight - 4 // Leave some margin
+	}
+	
+	widget.SetRect(0, 0, widgetWidth, widgetHeight)
 	flex := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
-			AddItem(widget, formHeight, 0, true).
-			AddItem(nil, 0, 1, false), formWidth, 0, true).
+			AddItem(widget, widgetHeight, 0, true).
+			AddItem(nil, 0, 1, false), widgetWidth, 0, true).
 		AddItem(nil, 0, 1, false)
 	flex.SetBackgroundColor(tcell.ColorNavy)
 	return flex
@@ -222,12 +242,12 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 				saveConnections()
 
 				// Return to main screen
-				app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+				app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
 				connectionsList.SetCurrentItem(newIndex)
 			}
 		}).
 		AddButton(currentLang["btn_cancel"], func() {
-			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+			app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
 		})
 
 	// Create flex for form with error text
@@ -244,7 +264,7 @@ func addConnection(app *tview.Application, connectionsList *tview.List) {
 		SetTitleColor(tcell.ColorWhite)
 
 	// Set form as active widget
-	app.SetRoot(centerWidget(formFlex), true)
+	app.SetRoot(centerWidget(app, formFlex), true)
 	app.SetFocus(form)
 }
 
@@ -323,9 +343,9 @@ func showMessage(app *tview.Application, list *tview.List, server string) {
 					sshConnect(server)
 				})
 			}
-			app.SetRoot(centerWidget(createMainLayout(app, list)), true)
+			app.SetRoot(centerWidget(app, createMainLayout(app, list)), true)
 		})
-	app.SetRoot(centerWidget(modal), true)
+	app.SetRoot(centerWidget(app, modal), true)
 }
 
 // openConfig opens the configuration file in the default system editor
@@ -362,9 +382,9 @@ func deleteConnection(app *tview.Application, list *tview.List, index int) {
 				// Save changes
 				saveConnections()
 			}
-			app.SetRoot(centerWidget(createMainLayout(app, list)), true)
+			app.SetRoot(centerWidget(app, createMainLayout(app, list)), true)
 		})
-	app.SetRoot(centerWidget(modal), true)
+	app.SetRoot(centerWidget(app, modal), true)
 }
 
 // editConnection displays a form for editing an existing SSH connection
@@ -425,11 +445,11 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 					showMessage(app, connectionsList, server)
 				})
 				saveConnections()
-				app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+				app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
 			}
 		}).
 		AddButton(currentLang["btn_cancel"], func() {
-			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+			app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
 		})
 
 	formFlex := tview.NewFlex().
@@ -443,7 +463,7 @@ func editConnection(app *tview.Application, connectionsList *tview.List, index i
 		SetBackgroundColor(tcell.ColorNavy).
 		SetBorderColor(tcell.ColorWhite).
 		SetTitleColor(tcell.ColorWhite)
-	app.SetRoot(centerWidget(formFlex), true)
+	app.SetRoot(centerWidget(app, formFlex), true)
 }
 
 
@@ -487,9 +507,9 @@ func switchLanguage(app *tview.Application, connectionsList *tview.List) {
 			// Save config with new language
 			saveConnections()
 
-			app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+			app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
 		})
-	app.SetRoot(centerWidget(modal), true)
+	app.SetRoot(centerWidget(app, modal), true)
 }
 
 // setupDebianTheme configures the Debian installer color scheme
@@ -613,7 +633,7 @@ func main() {
 	})
 
 	// Center main container
-	flex := centerWidget(createMainLayout(app, connectionsList))
+	flex := centerWidget(app, createMainLayout(app, connectionsList))
 
 	// Update key handler in main()
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
@@ -642,6 +662,19 @@ func main() {
 		switch event.Key() {
 		case tcell.KeyCtrlC:
 			app.Stop()
+		case tcell.KeyCtrlR:
+			// Refresh/redraw window - recreate layout and center it
+			currentFocus := app.GetFocus()
+			app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
+			// Restore focus to the previously focused element
+			if currentFocus == connectionsList {
+				app.SetFocus(connectionsList)
+			} else if currentFocus == menuList {
+				app.SetFocus(menuList)
+			} else {
+				app.SetFocus(connectionsList) // Default to connections list
+			}
+			return nil
 		case tcell.KeyTab:
 			// Switch between lists
 			if app.GetFocus() == connectionsList {
@@ -699,10 +732,10 @@ func main() {
 									AddItem(connectionsList, 0, 2, true).
 									AddItem(menuList, 0, 1, false).
 									AddItem(helpText, 0, 1, false)
-								app.SetRoot(centerWidget(lists), true)
+								app.SetRoot(centerWidget(app, lists), true)
 							}
 						})
-					app.SetRoot(centerWidget(modal), true)
+					app.SetRoot(centerWidget(app, modal), true)
 				}
 			}
 			return nil
@@ -717,12 +750,12 @@ func main() {
 				SetText(currentLang["dlg_add"]).
 				AddButtons([]string{currentLang["btn_ok"], currentLang["btn_cancel"]}).
 				SetDoneFunc(func(buttonIndex int, buttonLabel string) {
-					app.SetRoot(centerWidget(createMainLayout(app, connectionsList)), true)
+					app.SetRoot(centerWidget(app, createMainLayout(app, connectionsList)), true)
 					if buttonLabel == currentLang["btn_ok"] {
 						addConnection(app, connectionsList)
 					}
 				})
-			app.SetRoot(centerWidget(modal), true)
+			app.SetRoot(centerWidget(app, modal), true)
 			return nil
 		case tcell.KeyDelete:
 			if app.GetFocus() == connectionsList && connectionsList.GetItemCount() > 0 {

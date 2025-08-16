@@ -1,6 +1,6 @@
-# SSHman - command line SSH Connection Manager with TUI interface
+# SSHman — TUI SSH Connection Manager
 
-A terminal-based SSH connection manager written in Go using [tview](https://github.com/rivo/tview).
+Terminal UI tool for managing SSH connections, written in Go using [tview](https://github.com/rivo/tview).
 
 ## Features
 
@@ -13,8 +13,13 @@ A terminal-based SSH connection manager written in Go using [tview](https://gith
 
 ## Installation
 
+Build locally and run the `sshman` binary:
+
 ```bash
-go install github.com/mmag/sshmanager@latest
+git clone https://github.com/mmag/sshmanager.git
+cd sshmanager
+go build -o sshman
+# optionally: mv sshman ~/.local/bin
 ```
 
 ## Usage
@@ -22,7 +27,7 @@ go install github.com/mmag/sshmanager@latest
 Launch the application:
 
 ```bash
-sshmanager
+sshman
 ```
 
 ### Keyboard Shortcuts
@@ -36,31 +41,34 @@ sshmanager
 
 ### Configuration
 
-Config file is stored at `~/sshman/sshman.json` in the following format:
+Config is stored at `~/sshman/sshman.json` in the following format:
 
 ```json
-[
+{
+  "connections": [
     {
-        "server": "user@hostnameOrIP",
-        "comment": "Description",
-        "port": "22"
-    },
-    "language": "en"
-]
+      "server": "hostnameOrIP",
+      "comment": "Description",
+      "port": "22",
+      "username": "user"
+    }
+  ],
+  "language": "en"
+}
 ```
 
 ## Building from Source
 
+Same as Installation above, or:
+
 ```bash
-git clone https://github.com/mmag/sshmanager.git
-cd sshmanager
-go build
+go build -o sshman
 ```
 
 ## Requirements
 
-- Go 1.16 or higher
-- SSH client installed in system
+- Go 1.18 or higher
+- System SSH client available in PATH (`ssh`)
 
 ## License
 

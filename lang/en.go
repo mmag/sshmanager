@@ -43,7 +43,7 @@ var EN = map[string]string{
 	"ctx_actions": "Actions for %s",
 
 	// Help text
-	"help_text": " Controls:\n ↑↓ - Navigate list\n Tab - Switch section\n Enter - Connect\n Ctrl+E - Edit connection\n Ctrl+N - Add connection\n Del - Delete connection\n Ctrl+C - Exit",
+	"help_text": " Controls:                    \n ↑↓ - Navigate list           Tab - Switch section\n Enter - Connect              Ctrl+E - Edit connection\n Ctrl+N - Add connection      Del - Delete connection\n Ctrl+R - Refresh window      Ctrl+C - Exit",
 
 	// Error messages
 	"msg_config_dir_error":  "Error creating config directory: %v\n",
