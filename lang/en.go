@@ -27,6 +27,7 @@ var EN = map[string]string{
 	"msg_enter_server":   "Enter server address",
 	"msg_enter_comment":  "Enter comment",
 	"msg_conn_exists":    "Connection already exists",
+	"msg_invalid_port":   "Port must be a number between 1 and 65535",
 	"msg_connecting":     "Connecting to %s\n",
 	"msg_conn_error":     "Connection error to %s: %v\n",
 

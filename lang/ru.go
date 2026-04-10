@@ -27,6 +27,7 @@ var RU = map[string]string{
 	"msg_enter_server":   "Введите адрес сервера",
 	"msg_enter_comment":  "Введите комментарий",
 	"msg_conn_exists":    "Такое соединение уже существует",
+	"msg_invalid_port":   "Порт должен быть числом от 1 до 65535",
 	"msg_connecting":     "Подключение к %s\n",
 	"msg_conn_error":     "Ошибка подключения к %s: %v\n",
 
