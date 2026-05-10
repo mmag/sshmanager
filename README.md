@@ -15,7 +15,13 @@ Terminal UI tool for managing SSH connections, written in Go using [tview](https
 
 ## Installation
 
-Build locally and run the `sshman` binary:
+### Homebrew (macOS and Linux)
+
+```bash
+brew install mmag/tap/sshman
+```
+
+### Build from source
 
 ```bash
 git clone https://github.com/mmag/sshmanager.git
@@ -59,14 +65,6 @@ Config is stored at `~/sshman/sshman.json` in the following format:
   ],
   "language": "en"
 }
-```
-
-## Building from Source
-
-Same as Installation above, or:
-
-```bash
-go build -o sshman
 ```
 
 ## Requirements
