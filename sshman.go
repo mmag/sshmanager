@@ -23,7 +23,6 @@ import (
 	"github.com/rivo/tview"
 )
 
-// Update the config structure by adding a new type
 type Config struct {
 	Connections []SSHConnection `json:"connections"`
 	Language    string          `json:"language"`
@@ -36,27 +35,21 @@ type SSHConnection struct {
 	Username string `json:"username,omitempty"`
 }
 
-// Update global variables
 var (
 	sshConnections []SSHConnection
 	configDir      = filepath.Join(os.Getenv("HOME"), "sshman")
 	configFilePath = filepath.Join(configDir, "sshman.json")
 	menuList       *tview.List
 	helpText       *tview.TextView
-	config         Config // Add config variable
+	config         Config
 	statusMutex    sync.RWMutex
 	hostOnline     = make(map[string]bool)
+	currentLang    = lang.EN
 )
 
-// Add constants for dimensions
 const (
-	formWidth   = 100 // increase width for better readability
+	formWidth   = 100
 	hostTimeout = 2 * time.Second
-)
-
-// Add global variables
-var (
-	currentLang = lang.EN // Default language
 )
 
 // createMainLayout creates and returns the main application layout with the specified heights
@@ -230,7 +223,6 @@ func refreshConnectionsList(app *tview.Application, connectionsList *tview.List,
 func checkHostsOnline(app *tview.Application, connectionsList *tview.List, connections []SSHConnection) {
 	snapshot := append([]SSHConnection(nil), connections...)
 	for _, conn := range snapshot {
-		conn := conn
 		go func() {
 			online := checkHostOnline(conn)
 			setHostStatus(conn.Server, online)
@@ -242,37 +234,20 @@ func checkHostsOnline(app *tview.Application, connectionsList *tview.List, conne
 	}
 }
 
-// centerWidget centers the provided widget in the screen with dynamic dimensions
 func centerWidget(widget tview.Primitive) *tview.Flex {
-	// Use reasonable defaults for screen size
-	// tview will handle actual centering based on current terminal size
-	screenWidth, screenHeight := 120, 40
-
-	// Calculate widget dimensions based on screen size
-	widgetWidth := formWidth
-	if screenWidth < formWidth {
-		widgetWidth = screenWidth - 4 // Leave some margin
-	}
-
-	// Calculate total height needed for layout
 	menuHeight := menuList.GetItemCount() + 2
 	helpHeight := 8
 	connectionsHeight := len(sshConnections) + 3
-	totalHeight := menuHeight + helpHeight + connectionsHeight
+	widgetHeight := menuHeight + helpHeight + connectionsHeight
 
-	widgetHeight := totalHeight
-	if screenHeight < totalHeight {
-		widgetHeight = screenHeight - 4 // Leave some margin
-	}
-
-	widget.SetRect(0, 0, widgetWidth, widgetHeight)
+	widget.SetRect(0, 0, formWidth, widgetHeight)
 	flex := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
 		AddItem(tview.NewFlex().
 			SetDirection(tview.FlexRow).
 			AddItem(nil, 0, 1, false).
 			AddItem(widget, widgetHeight, 0, true).
-			AddItem(nil, 0, 1, false), widgetWidth, 0, true).
+			AddItem(nil, 0, 1, false), formWidth, 0, true).
 		AddItem(nil, 0, 1, false)
 	flex.SetBackgroundColor(tcell.ColorNavy)
 	return flex
@@ -792,13 +767,13 @@ func main() {
 			refreshConnectionsList(app, connectionsList, currentIndex)
 			checkHostsOnline(app, connectionsList, sshConnections)
 			app.SetRoot(centerWidget(createMainLayout(connectionsList)), true)
-			// Restore focus to the previously focused element
-			if currentFocus == connectionsList {
+			switch currentFocus {
+			case connectionsList:
 				app.SetFocus(connectionsList)
-			} else if currentFocus == menuList {
+			case menuList:
 				app.SetFocus(menuList)
-			} else {
-				app.SetFocus(connectionsList) // Default to connections list
+			default:
+				app.SetFocus(connectionsList)
 			}
 			return nil
 		case tcell.KeyTab:

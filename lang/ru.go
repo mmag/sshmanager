@@ -37,12 +37,6 @@ var RU = map[string]string{
 	"dlg_delete":  "Удалить соединение %s?",
 	"dlg_add":     "Добавить новое соединение?",
 
-	// Context menu
-	"ctx_connect": "Подключить",
-	"ctx_edit":    "Редактировать",
-	"ctx_cancel":  "Отмена",
-	"ctx_actions": "Действия для %s",
-
 	// Help text
 	"help_text": " Управление:                           \n ↑↓ - Навигация по списку              Tab - Переключить раздел\n Enter - Подключиться                  Ctrl+E - Редактировать соединение\n Ctrl+N - Добавить соединение          Del - Удалить соединение\n Ctrl+R - Обновить окно                Ctrl+C - Выход",
 

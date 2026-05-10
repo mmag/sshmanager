@@ -37,12 +37,6 @@ var EN = map[string]string{
 	"dlg_delete":  "Delete connection %s?",
 	"dlg_add":     "Add new connection?",
 
-	// Context menu
-	"ctx_connect": "Connect",
-	"ctx_edit":    "Edit",
-	"ctx_cancel":  "Cancel",
-	"ctx_actions": "Actions for %s",
-
 	// Help text
 	"help_text": " Controls:                    \n ↑↓ - Navigate list           Tab - Switch section\n Enter - Connect              Ctrl+E - Edit connection\n Ctrl+N - Add connection      Del - Delete connection\n Ctrl+R - Refresh window      Ctrl+C - Exit",
 
