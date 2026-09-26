@@ -398,6 +398,10 @@ func switchLanguage() {
 			showMain()
 			return
 		}
+		// The first tab follows the language until the user renames it
+		if name := config.Tabs[0].Name; name == lang.EN["tab_default"] || name == lang.RU["tab_default"] {
+			config.Tabs[0].Name = currentLang["tab_default"]
+		}
 		applyLanguage()
 		refreshConnectionsList(connectionsList.GetCurrentItem())
 		saveConfig()
