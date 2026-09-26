@@ -48,7 +48,7 @@ var RU = map[string]string{
 	"msg_parse_error":       "Ошибка разбора файла: %v\n",
 	"msg_config_open_error": "Ошибка открытия конфига: %v\n",
 	"msg_app_error":         "Ошибка запуска приложения: %v\n",
-	
+
 	// Language code
 	"language_code": "ru",
 }

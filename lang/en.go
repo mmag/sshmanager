@@ -48,7 +48,7 @@ var EN = map[string]string{
 	"msg_parse_error":       "Error parsing file: %v\n",
 	"msg_config_open_error": "Error opening config: %v\n",
 	"msg_app_error":         "Application error: %v\n",
-	
+
 	// Language code
 	"language_code": "en",
 }
