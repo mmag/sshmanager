@@ -6,7 +6,8 @@ Terminal UI tool for managing SSH connections, written in Go using [tview](https
 
 - Manage SSH connections with friendly names
 - Support for custom ports and usernames
-- Online/offline status indicators for hosts
+- Host availability indicators, refreshed by ping every 15 seconds (configurable)
+- Full SSH login check for the selected host
 - Terminal UI with keyboard navigation
 - English and Russian interface languages
 - Config file storage in JSON format
@@ -46,6 +47,7 @@ sshman
 - `Ctrl+E` - Edit selected connection
 - `Ctrl+N` - Add new connection
 - `Del` - Delete selected connection
+- `Ctrl+Enter` / `Ctrl+T` - Check SSH login for the selected server
 - `Ctrl+R` - Refresh window and recheck host statuses
 - `Ctrl+C` - Exit application
 
@@ -63,9 +65,18 @@ Config is stored at `~/sshman/sshman.json` in the following format:
       "username": "user"
     }
   ],
-  "language": "en"
+  "language": "en",
+  "check_interval": 15
 }
 ```
+
+`check_interval` sets how often hosts are pinged, in seconds; `0` limits checks to startup and `Ctrl+R`.
+Ping doesn't touch sshd, so frequent checks don't trigger fail2ban and similar protection.
+Checks are paused while an SSH session is open.
+
+The SSH login check runs `ssh` in batch mode with your `~/.ssh/config`, so it also works
+for host aliases and ProxyJump hosts, and reports whether key authentication succeeds.
+Many terminals send `Ctrl+Enter` as a plain `Enter`; use `Ctrl+T` there.
 
 ## Requirements
 

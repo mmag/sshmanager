@@ -1,70 +1,146 @@
 package main
 
 import (
+	"context"
 	"net"
+	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 	"time"
 )
 
-const hostTimeout = 2 * time.Second
+const (
+	pingTimeout = 2 * time.Second
+	// minCheckInterval protects hosts from a too small check_interval in the config
+	minCheckInterval = 5 * time.Second
+)
 
-// hostOnline holds the last check result per server address.
-// It is only accessed from the UI goroutine.
-var hostOnline = make(map[string]bool)
+type hostStatus int
+
+const (
+	statusUnknown hostStatus = iota
+	statusOnline
+	statusOffline
+)
+
+var (
+	// hostStatuses and checksInFlight are keyed by server address
+	// and only accessed from the UI goroutine
+	hostStatuses   = make(map[string]hostStatus)
+	checksInFlight = make(map[string]bool)
+
+	checkTicker   *time.Ticker
+	checkInterval time.Duration
+)
 
 func statusSymbol(server string) string {
-	if hostOnline[server] {
+	switch hostStatuses[server] {
+	case statusOnline:
 		return "[green]✓[-]"
+	case statusOffline:
+		return "[red]✗[-]"
 	}
-	return "[red]✗[-]"
+	return "[gray]?[-]"
 }
 
-func connectionAddress(conn SSHConnection) string {
+// connectionHost extracts the host name or IP from the server field,
+// which may contain a user@ prefix, a :port suffix or IPv6 brackets
+func connectionHost(conn SSHConnection) string {
 	host := strings.TrimSpace(conn.Server)
 	if at := strings.LastIndex(host, "@"); at >= 0 {
 		host = host[at+1:]
 	}
+	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
+		return parsedHost
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+}
+
+// pingCommand builds a single ping with a timeout for the current platform
+func pingCommand(ctx context.Context, host string) *exec.Cmd {
+	seconds := strconv.Itoa(int(pingTimeout.Seconds()))
+	switch runtime.GOOS {
+	case "windows":
+		return exec.CommandContext(ctx, "ping", "-n", "1", "-w", strconv.Itoa(int(pingTimeout.Milliseconds())), host)
+	case "darwin", "freebsd":
+		// ping there doesn't accept IPv6 addresses, and ping6 has no timeout option
+		if strings.Contains(host, ":") {
+			return exec.CommandContext(ctx, "ping6", "-c", "1", host)
+		}
+		return exec.CommandContext(ctx, "ping", "-c", "1", "-t", seconds, host)
+	default:
+		return exec.CommandContext(ctx, "ping", "-c", "1", "-W", seconds, host)
+	}
+}
+
+// pingHost reports whether the host answers an ICMP echo request.
+// Ping doesn't touch sshd, so frequent checks don't trigger fail2ban and similar tools.
+func pingHost(host string) bool {
 	if host == "" {
-		return ""
-	}
-
-	if conn.Port == "" {
-		if parsedHost, parsedPort, err := net.SplitHostPort(host); err == nil && parsedHost != "" && parsedPort != "" {
-			return net.JoinHostPort(parsedHost, parsedPort)
-		}
-		if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
-			host = strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
-		}
-		return net.JoinHostPort(host, "22")
-	}
-
-	return net.JoinHostPort(host, conn.Port)
-}
-
-func checkHostOnline(conn SSHConnection) bool {
-	address := connectionAddress(conn)
-	if address == "" {
 		return false
 	}
-
-	connection, err := net.DialTimeout("tcp", address, hostTimeout)
-	if err != nil {
-		return false
-	}
-	_ = connection.Close()
-	return true
+	ctx, cancel := context.WithTimeout(context.Background(), pingTimeout+time.Second)
+	defer cancel()
+	return pingCommand(ctx, host).Run() == nil
 }
 
-// checkHosts probes the given connections in the background
-// and refreshes the list as results arrive
+// checkHosts pings the given connections in the background and updates
+// their statuses as results arrive. Hosts still being checked are skipped.
 func checkHosts(connections []SSHConnection) {
 	for _, conn := range connections {
+		server := conn.Server
+		if checksInFlight[server] {
+			continue
+		}
+		checksInFlight[server] = true
+
+		host := connectionHost(conn)
 		go func() {
-			online := checkHostOnline(conn)
+			status := statusOffline
+			if pingHost(host) {
+				status = statusOnline
+			}
 			app.QueueUpdateDraw(func() {
-				hostOnline[conn.Server] = online
-				refreshConnectionsList(connectionsList.GetCurrentItem())
+				delete(checksInFlight, server)
+				if findConnection(server) < 0 || hostStatuses[server] == status {
+					return
+				}
+				hostStatuses[server] = status
+				updateStatusSymbols()
 			})
 		}()
 	}
+}
+
+// startPeriodicChecks rechecks all hosts every check_interval seconds; 0 disables it
+func startPeriodicChecks() {
+	if config.CheckInterval <= 0 {
+		return
+	}
+	checkInterval = max(time.Duration(config.CheckInterval)*time.Second, minCheckInterval)
+	checkTicker = time.NewTicker(checkInterval)
+	go func() {
+		for range checkTicker.C {
+			app.QueueUpdate(func() {
+				checkHosts(config.Connections)
+			})
+		}
+	}()
+}
+
+// pauseChecks stops periodic checks while an ssh session occupies the terminal.
+// Otherwise updates would pile up in the event queue, which is not processed while suspended.
+func pauseChecks() {
+	if checkTicker != nil {
+		checkTicker.Stop()
+	}
+}
+
+// resumeChecks restarts periodic checks and refreshes all statuses right away
+func resumeChecks() {
+	if checkTicker != nil {
+		checkTicker.Reset(checkInterval)
+	}
+	checkHosts(config.Connections)
 }

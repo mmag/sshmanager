@@ -15,6 +15,8 @@ import (
 type Config struct {
 	Connections []SSHConnection `json:"connections"`
 	Language    string          `json:"language"`
+	// CheckInterval is the period of host availability checks in seconds, 0 disables them
+	CheckInterval int `json:"check_interval"`
 }
 
 type SSHConnection struct {
@@ -27,7 +29,7 @@ type SSHConnection struct {
 var (
 	configDir      = filepath.Join(os.Getenv("HOME"), "sshman")
 	configFilePath = filepath.Join(configDir, "sshman.json")
-	config         Config
+	config         = Config{CheckInterval: 15}
 	currentLang    = lang.EN
 )
 

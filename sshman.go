@@ -11,6 +11,18 @@ import (
 	"github.com/rivo/tview"
 )
 
+// isSSHCheckKey matches Ctrl+Enter and the Ctrl+T fallback. Terminals that tell
+// Ctrl+Enter apart from Enter usually send it as Ctrl+J, the rest send plain Enter.
+func isSSHCheckKey(event *tcell.EventKey) bool {
+	switch event.Key() {
+	case tcell.KeyCtrlJ, tcell.KeyCtrlT:
+		return true
+	case tcell.KeyEnter:
+		return event.Modifiers()&tcell.ModCtrl != 0
+	}
+	return false
+}
+
 // handleKey processes shortcuts of the main screen; dialogs and forms receive keys untouched
 func handleKey(event *tcell.EventKey) *tcell.EventKey {
 	if !mainScreen {
@@ -18,6 +30,13 @@ func handleKey(event *tcell.EventKey) *tcell.EventKey {
 	}
 
 	focus := app.GetFocus()
+	if isSSHCheckKey(event) {
+		if index := selectedConnection(); focus == connectionsList && index >= 0 {
+			checkSSH(index)
+		}
+		return nil
+	}
+
 	switch event.Key() {
 	case tcell.KeyCtrlR:
 		// Redraw window and recheck hosts
@@ -75,6 +94,7 @@ func startApp() {
 
 	app.SetInputCapture(handleKey)
 	checkHosts(config.Connections)
+	startPeriodicChecks()
 	showMain()
 }
 

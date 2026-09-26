@@ -37,8 +37,15 @@ var EN = map[string]string{
 	"dlg_delete":  "Delete connection %s?",
 	"dlg_add":     "Add new connection?",
 
+	// SSH login check
+	"dlg_ssh_checking": "Checking SSH login: %s…",
+	"ssh_ok":           "%s\n\nSSH login succeeded in %.1f s",
+	"ssh_denied":       "%s\n\nSSH server responds, but login failed:\n%s",
+	"ssh_failed":       "%s\n\nConnection failed:\n%s",
+	"ssh_timeout":      "%s\n\nNo response in %d s",
+
 	// Help text
-	"help_text": " Controls:                    \n ↑↓ - Navigate list           Tab - Switch section\n Enter - Connect              Ctrl+E - Edit connection\n Ctrl+N - Add connection      Del - Delete connection\n Ctrl+R - Refresh window      Ctrl+C - Exit",
+	"help_text": " Controls:\n ↑↓ - Navigate list           Tab - Switch section\n Enter - Connect              Ctrl+Enter, Ctrl+T - Check SSH login\n Ctrl+N - Add connection      Ctrl+E - Edit connection\n Del - Delete connection      Ctrl+R - Recheck hosts\n Ctrl+C - Exit",
 
 	// Error messages
 	"msg_config_dir_error":  "Error creating config directory: %v\n",

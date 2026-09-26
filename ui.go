@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -248,6 +249,16 @@ func refreshConnectionsList(selected int) {
 	connectionsList.SetCurrentItem(max(0, min(selected, len(config.Connections)-1)))
 }
 
+// updateStatusSymbols redraws status symbols without rebuilding the list
+func updateStatusSymbols() {
+	if connectionsList.GetItemCount() != len(config.Connections) {
+		return
+	}
+	for i, conn := range config.Connections {
+		connectionsList.SetItemText(i, formatConnectionLine(conn), "")
+	}
+}
+
 // selectedConnection returns the index of the highlighted connection, or -1 if there is none
 func selectedConnection() int {
 	index := connectionsList.GetCurrentItem()
@@ -261,11 +272,36 @@ func selectedConnection() int {
 func connectTo(index int) {
 	conn := config.Connections[index]
 	confirm(fmt.Sprintf(currentLang["dlg_connect"], conn.Server), func() {
+		pauseChecks()
 		app.Suspend(func() {
 			sshConnect(conn)
 		})
+		resumeChecks()
 		showMain()
 	})
+}
+
+// checkSSH runs a full ssh login check for the connection and shows the result
+func checkSSH(index int) {
+	conn := config.Connections[index]
+	ctx, cancel := context.WithCancel(context.Background())
+	showModal(fmt.Sprintf(currentLang["dlg_ssh_checking"], conn.Server), []string{currentLang["btn_cancel"]}, func(string) {
+		cancel()
+		showMain()
+	})
+
+	go func() {
+		result := sshCheck(ctx, conn)
+		app.QueueUpdateDraw(func() {
+			if ctx.Err() != nil {
+				return // Cancelled by the user
+			}
+			cancel()
+			showModal(result, []string{currentLang["btn_ok"]}, func(string) {
+				showMain()
+			})
+		})
+	}()
 }
 
 // showConnectionForm displays a form for adding (index -1) or editing an SSH connection
@@ -319,7 +355,7 @@ func showConnectionForm(index int) {
 			} else {
 				config.Connections[index] = updated
 				if updated.Server != conn.Server {
-					delete(hostOnline, conn.Server)
+					delete(hostStatuses, conn.Server)
 				}
 			}
 			saveConfig()
@@ -337,7 +373,7 @@ func deleteConnection(index int) {
 	server := config.Connections[index].Server
 	confirm(fmt.Sprintf(currentLang["dlg_delete"], server), func() {
 		config.Connections = append(config.Connections[:index], config.Connections[index+1:]...)
-		delete(hostOnline, server)
+		delete(hostStatuses, server)
 		saveConfig()
 		refreshConnectionsList(index)
 		showMain()
