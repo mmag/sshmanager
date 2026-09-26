@@ -103,7 +103,7 @@ func checkHosts(connections []SSHConnection) {
 			}
 			app.QueueUpdateDraw(func() {
 				delete(checksInFlight, server)
-				if findConnection(server) < 0 || hostStatuses[server] == status {
+				if !connectionExists(server) || hostStatuses[server] == status {
 					return
 				}
 				hostStatuses[server] = status
@@ -123,7 +123,7 @@ func startPeriodicChecks() {
 	go func() {
 		for range checkTicker.C {
 			app.QueueUpdate(func() {
-				checkHosts(config.Connections)
+				checkHosts(allConnections())
 			})
 		}
 	}()
@@ -142,5 +142,5 @@ func resumeChecks() {
 	if checkTicker != nil {
 		checkTicker.Reset(checkInterval)
 	}
-	checkHosts(config.Connections)
+	checkHosts(allConnections())
 }

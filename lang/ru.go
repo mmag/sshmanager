@@ -6,6 +6,9 @@ var RU = map[string]string{
 	"connections_title": "Соединения",
 	"menu_add":          "Добавить соединение",
 	"menu_language":     "Язык",
+	"menu_tab_add":      "Новая вкладка",
+	"menu_tab_rename":   "Переименовать вкладку",
+	"menu_tab_delete":   "Удалить вкладку",
 	"menu_edit_config":  "Редактировать конфиг",
 	"menu_exit":         "Выход",
 
@@ -19,6 +22,7 @@ var RU = map[string]string{
 	"form_port":     "Порт",
 	"form_comment":  "Комментарий",
 	"form_username": "Имя пользователя",
+	"form_tab":      "Вкладка",
 	"title_add":     "Добавить соединение",
 	"title_edit":    "Редактировать соединение",
 
@@ -44,8 +48,21 @@ var RU = map[string]string{
 	"ssh_failed":       "%s\n\nНе удалось подключиться:\n%s",
 	"ssh_timeout":      "%s\n\nНет ответа за %d с",
 
+	// Tabs
+	"tab_default":          "Основные",
+	"title_tab_add":        "Новая вкладка",
+	"title_tab_rename":     "Переименовать вкладку",
+	"form_tab_name":        "Название",
+	"msg_enter_tab_name":   "Введите название вкладки",
+	"msg_tab_exists":       "Такая вкладка уже существует",
+	"msg_first_tab":        "Первую вкладку удалить нельзя",
+	"dlg_tab_delete":       "Удалить вкладку «%s»?",
+	"dlg_tab_delete_conns": "Удалить вкладку «%s»?\nСоединений в ней: %d",
+	"btn_tab_delete_all":   "Удалить с соединениями",
+	"btn_tab_move":         "Перенести в «%s»",
+
 	// Help text
-	"help_text": " Управление:\n ↑↓ - Навигация по списку              Tab - Переключить раздел\n Enter - Подключиться                  Ctrl+Enter, Ctrl+T - Проверить вход по SSH\n Ctrl+N - Добавить соединение          Ctrl+E - Редактировать соединение\n Del - Удалить соединение              Ctrl+R - Проверить доступность\n Ctrl+C - Выход",
+	"help_text": " Управление:\n ↑↓ - Навигация по списку              ←→, 1-9 - Переключить вкладку\n Enter - Подключиться                  Ctrl+Enter, Ctrl+T - Проверить вход по SSH\n Ctrl+N - Добавить соединение          Ctrl+E - Редактировать соединение\n Del - Удалить соединение              Ctrl+R - Проверить доступность\n Tab - Переключить раздел              Ctrl+C - Выход",
 
 	// Error messages
 	"msg_config_dir_error":  "Ошибка создания директории конфигурации: %v\n",

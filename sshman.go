@@ -41,7 +41,7 @@ func handleKey(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyCtrlR:
 		// Redraw window and recheck hosts
 		refreshConnectionsList(connectionsList.GetCurrentItem())
-		checkHosts(config.Connections)
+		checkHosts(allConnections())
 		showMain()
 		app.SetFocus(focus)
 		return nil
@@ -53,6 +53,18 @@ func handleKey(event *tcell.EventKey) *tcell.EventKey {
 			app.SetFocus(connectionsList)
 		}
 		return nil
+	case tcell.KeyLeft:
+		switchTab((currentTab + len(config.Tabs) - 1) % len(config.Tabs))
+		return nil
+	case tcell.KeyRight:
+		switchTab((currentTab + 1) % len(config.Tabs))
+		return nil
+	case tcell.KeyRune:
+		// 1-9 jump to a tab
+		if r := event.Rune(); r >= '1' && r <= '9' {
+			switchTab(int(r - '1'))
+			return nil
+		}
 	case tcell.KeyDown:
 		// Wrap around at the end
 		if list, ok := focus.(*tview.List); ok && list.GetCurrentItem() == list.GetItemCount()-1 {
@@ -67,7 +79,7 @@ func handleKey(event *tcell.EventKey) *tcell.EventKey {
 		}
 	case tcell.KeyCtrlE:
 		if index := selectedConnection(); focus == connectionsList && index >= 0 {
-			confirm(fmt.Sprintf(currentLang["dlg_edit"], config.Connections[index].Server), func() {
+			confirm(fmt.Sprintf(currentLang["dlg_edit"], currentConnections()[index].Server), func() {
 				showConnectionForm(index)
 			})
 		}
@@ -93,7 +105,7 @@ func startApp() {
 	setupUI()
 
 	app.SetInputCapture(handleKey)
-	checkHosts(config.Connections)
+	checkHosts(allConnections())
 	startPeriodicChecks()
 	showMain()
 }

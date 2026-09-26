@@ -13,10 +13,17 @@ import (
 )
 
 type Config struct {
-	Connections []SSHConnection `json:"connections"`
+	Tabs []Tab `json:"tabs"`
+	// Connections is the list from configs without tabs, moved to the first tab on load
+	Connections []SSHConnection `json:"connections,omitempty"`
 	Language    string          `json:"language"`
 	// CheckInterval is the period of host availability checks in seconds, 0 disables them
 	CheckInterval int `json:"check_interval"`
+}
+
+type Tab struct {
+	Name        string          `json:"name"`
+	Connections []SSHConnection `json:"connections,omitempty"`
 }
 
 type SSHConnection struct {
@@ -37,21 +44,25 @@ var (
 // Silently handles the case when the config file doesn't exist
 func loadConfig() {
 	data, err := os.ReadFile(configFilePath)
-	if err != nil {
-		if !os.IsNotExist(err) {
-			log.Printf(currentLang["msg_read_error"], err)
+	switch {
+	case err == nil:
+		if err := json.Unmarshal(data, &config); err != nil {
+			log.Printf(currentLang["msg_parse_error"], err)
 		}
-		return
-	}
-
-	if err := json.Unmarshal(data, &config); err != nil {
-		log.Printf(currentLang["msg_parse_error"], err)
-		return
+	case !os.IsNotExist(err):
+		log.Printf(currentLang["msg_read_error"], err)
 	}
 
 	if config.Language == "ru" {
 		currentLang = lang.RU
 	}
+
+	// The first tab always exists and receives connections from configs without tabs
+	if len(config.Tabs) == 0 {
+		config.Tabs = []Tab{{Name: currentLang["tab_default"]}}
+	}
+	config.Tabs[0].Connections = append(config.Connections, config.Tabs[0].Connections...)
+	config.Connections = nil
 }
 
 // saveConfig writes the configuration to disk
@@ -96,14 +107,39 @@ func openConfig() {
 	}
 }
 
-// findConnection returns the index of the connection with the given server address, or -1
-func findConnection(server string) int {
-	for i, conn := range config.Connections {
-		if conn.Server == server {
-			return i
+// currentConnections returns the connections of the current tab
+func currentConnections() []SSHConnection {
+	return config.Tabs[currentTab].Connections
+}
+
+// allConnections returns the connections of all tabs
+func allConnections() []SSHConnection {
+	var connections []SSHConnection
+	for _, tab := range config.Tabs {
+		connections = append(connections, tab.Connections...)
+	}
+	return connections
+}
+
+// connectionExists reports whether any tab has a connection with the given server address
+func connectionExists(server string) bool {
+	for _, tab := range config.Tabs {
+		for _, conn := range tab.Connections {
+			if conn.Server == server {
+				return true
+			}
 		}
 	}
-	return -1
+	return false
+}
+
+func tabExists(name string) bool {
+	for _, tab := range config.Tabs {
+		if tab.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // isValidPort checks that port string is empty (use default) or a number 1–65535

@@ -5,6 +5,7 @@ Terminal UI tool for managing SSH connections, written in Go using [tview](https
 ## Features
 
 - Manage SSH connections with friendly names
+- Group connections into tabs (e.g. Home, Work), created, renamed and deleted from the menu
 - Support for custom ports and usernames
 - Host availability indicators, refreshed by ping every 15 seconds (configurable)
 - Full SSH login check for the selected host
@@ -43,6 +44,7 @@ sshman
 
 - `↑`/`↓` - Navigate through lists
 - `Tab` - Switch between sections
+- `←`/`→`, `1`–`9` - Switch tabs (or click a tab)
 - `Enter` - Connect to selected server
 - `Ctrl+E` - Edit selected connection
 - `Ctrl+N` - Add new connection
@@ -57,18 +59,31 @@ Config is stored at `~/sshman/sshman.json` in the following format:
 
 ```json
 {
-  "connections": [
+  "tabs": [
     {
-      "server": "hostnameOrIP",
-      "comment": "Description",
-      "port": "22",
-      "username": "user"
+      "name": "Home",
+      "connections": [
+        {
+          "server": "hostnameOrIP",
+          "comment": "Description",
+          "port": "22",
+          "username": "user"
+        }
+      ]
+    },
+    {
+      "name": "Work",
+      "connections": []
     }
   ],
   "language": "en",
   "check_interval": 15
 }
 ```
+
+The first tab can't be deleted. When another tab is deleted, its connections are either
+deleted too or moved to the first tab. Configs from older versions with a top-level
+`connections` list are loaded into the first tab.
 
 `check_interval` sets how often hosts are pinged, in seconds; `0` limits checks to startup and `Ctrl+R`.
 Ping doesn't touch sshd, so frequent checks don't trigger fail2ban and similar protection.

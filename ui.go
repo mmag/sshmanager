@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"sshman/lang"
@@ -12,8 +13,9 @@ import (
 )
 
 const (
-	formWidth  = 100
-	helpHeight = 8
+	formWidth    = 100
+	tabBarHeight = 1
+	helpHeight   = 8
 )
 
 var (
@@ -52,6 +54,7 @@ func newList() *tview.List {
 
 // setupUI creates the main screen widgets
 func setupUI() {
+	tabBar = NewTabBar()
 	connectionsList = newList()
 	connectionsList.SetUseStyleTags(true, false)
 	menuList = newList()
@@ -93,20 +96,29 @@ func applyLanguage() {
 
 	menuList.Clear()
 	menuList.AddItem(" "+currentLang["menu_add"], "", 0, func() { showConnectionForm(-1) })
+	menuList.AddItem(" "+currentLang["menu_tab_add"], "", 0, func() { showTabForm(-1) })
+	menuList.AddItem(" "+currentLang["menu_tab_rename"], "", 0, func() { showTabForm(currentTab) })
+	menuList.AddItem(" "+currentLang["menu_tab_delete"], "", 0, deleteTab)
 	menuList.AddItem(" "+currentLang["menu_language"], "", 0, switchLanguage)
 	menuList.AddItem(" "+currentLang["menu_edit_config"], "", 0, openConfig)
 	menuList.AddItem(" "+currentLang["menu_exit"], "", 0, app.Stop)
 }
 
-// layoutHeights returns the heights of the connections list and the menu including borders
+// layoutHeights returns the heights of the connections list and the menu including borders.
+// The list fits the largest tab, so switching tabs doesn't resize the window.
 func layoutHeights() (connections, menu int) {
-	return len(config.Connections) + 3, menuList.GetItemCount() + 2
+	largest := 0
+	for _, tab := range config.Tabs {
+		largest = max(largest, len(tab.Connections))
+	}
+	return largest + 3, menuList.GetItemCount() + 2
 }
 
 func mainLayout() *tview.Flex {
 	connectionsHeight, menuHeight := layoutHeights()
 	return tview.NewFlex().
 		SetDirection(tview.FlexRow).
+		AddItem(tabBar, tabBarHeight, 0, false).
 		AddItem(connectionsList, connectionsHeight, 0, true).
 		AddItem(menuList, menuHeight, 0, false).
 		AddItem(helpText, helpHeight, 0, false)
@@ -116,7 +128,7 @@ func mainLayout() *tview.Flex {
 // in a box of the same size as the main layout
 func centerWidget(widget tview.Primitive) *tview.Flex {
 	connectionsHeight, menuHeight := layoutHeights()
-	height := connectionsHeight + menuHeight + helpHeight
+	height := tabBarHeight + connectionsHeight + menuHeight + helpHeight
 
 	flex := tview.NewFlex().
 		AddItem(nil, 0, 1, false).
@@ -238,23 +250,25 @@ func formatConnectionLine(conn SSHConnection) string {
 func refreshConnectionsList(selected int) {
 	connectionsList.Clear()
 
-	if len(config.Connections) == 0 {
+	connections := currentConnections()
+	if len(connections) == 0 {
 		connectionsList.AddItem(currentLang["msg_no_connections"], "", 0, nil)
 		return
 	}
 
-	for i, conn := range config.Connections {
+	for i, conn := range connections {
 		connectionsList.AddItem(formatConnectionLine(conn), "", 0, func() { connectTo(i) })
 	}
-	connectionsList.SetCurrentItem(max(0, min(selected, len(config.Connections)-1)))
+	connectionsList.SetCurrentItem(max(0, min(selected, len(connections)-1)))
 }
 
 // updateStatusSymbols redraws status symbols without rebuilding the list
 func updateStatusSymbols() {
-	if connectionsList.GetItemCount() != len(config.Connections) {
+	connections := currentConnections()
+	if connectionsList.GetItemCount() != len(connections) {
 		return
 	}
-	for i, conn := range config.Connections {
+	for i, conn := range connections {
 		connectionsList.SetItemText(i, formatConnectionLine(conn), "")
 	}
 }
@@ -262,7 +276,7 @@ func updateStatusSymbols() {
 // selectedConnection returns the index of the highlighted connection, or -1 if there is none
 func selectedConnection() int {
 	index := connectionsList.GetCurrentItem()
-	if index < 0 || index >= len(config.Connections) {
+	if index < 0 || index >= len(currentConnections()) {
 		return -1
 	}
 	return index
@@ -270,7 +284,7 @@ func selectedConnection() int {
 
 // connectTo asks for confirmation and runs ssh with the application suspended
 func connectTo(index int) {
-	conn := config.Connections[index]
+	conn := currentConnections()[index]
 	confirm(fmt.Sprintf(currentLang["dlg_connect"], conn.Server), func() {
 		pauseChecks()
 		app.Suspend(func() {
@@ -283,7 +297,7 @@ func connectTo(index int) {
 
 // checkSSH runs a full ssh login check for the connection and shows the result
 func checkSSH(index int) {
-	conn := config.Connections[index]
+	conn := currentConnections()[index]
 	ctx, cancel := context.WithCancel(context.Background())
 	showModal(fmt.Sprintf(currentLang["dlg_ssh_checking"], conn.Server), []string{currentLang["btn_cancel"]}, func(string) {
 		cancel()
@@ -304,12 +318,14 @@ func checkSSH(index int) {
 	}()
 }
 
-// showConnectionForm displays a form for adding (index -1) or editing an SSH connection
+// showConnectionForm displays a form for adding (index -1) or editing
+// a connection of the current tab; the connection can be moved to another tab
 func showConnectionForm(index int) {
 	var conn SSHConnection
 	title := currentLang["title_add"]
+	sourceTab := currentTab
 	if index >= 0 {
-		conn = config.Connections[index]
+		conn = currentConnections()[index]
 		title = currentLang["title_edit"]
 	}
 
@@ -317,7 +333,7 @@ func showConnectionForm(index int) {
 	form := newForm()
 	form.
 		AddInputField(currentLang["form_server"], conn.Server, 30, nil, func(text string) {
-			if text != conn.Server && findConnection(text) >= 0 {
+			if text != conn.Server && connectionExists(text) {
 				errorText.SetText(currentLang["msg_conn_exists"])
 			} else {
 				errorText.SetText("")
@@ -326,6 +342,7 @@ func showConnectionForm(index int) {
 		AddInputField(currentLang["form_port"], conn.Port, 5, nil, nil).
 		AddInputField(currentLang["form_comment"], conn.Comment, 30, nil, nil).
 		AddInputField(currentLang["form_username"], conn.Username, 20, nil, nil).
+		AddDropDown(currentLang["form_tab"], tabNames(), sourceTab, nil).
 		AddButton(currentLang["btn_save"], func() {
 			updated := SSHConnection{
 				Server:   inputText(form, 0),
@@ -333,6 +350,7 @@ func showConnectionForm(index int) {
 				Comment:  inputText(form, 2),
 				Username: inputText(form, 3),
 			}
+			targetTab, _ := form.GetFormItem(4).(*tview.DropDown).GetCurrentOption()
 
 			switch {
 			case updated.Server == "":
@@ -344,35 +362,47 @@ func showConnectionForm(index int) {
 			case !isValidPort(updated.Port):
 				errorText.SetText(currentLang["msg_invalid_port"])
 				return
-			case updated.Server != conn.Server && findConnection(updated.Server) >= 0:
+			case updated.Server != conn.Server && connectionExists(updated.Server):
 				errorText.SetText(currentLang["msg_conn_exists"])
 				return
 			}
 
-			if index < 0 {
-				config.Connections = append(config.Connections, updated)
-				index = len(config.Connections) - 1
-			} else {
-				config.Connections[index] = updated
+			if index >= 0 {
 				if updated.Server != conn.Server {
 					delete(hostStatuses, conn.Server)
 				}
+				if targetTab == sourceTab {
+					config.Tabs[sourceTab].Connections[index] = updated
+				} else {
+					config.Tabs[sourceTab].Connections = slices.Delete(config.Tabs[sourceTab].Connections, index, index+1)
+					index = -1
+				}
+			}
+			if index < 0 {
+				config.Tabs[targetTab].Connections = append(config.Tabs[targetTab].Connections, updated)
+				index = len(config.Tabs[targetTab].Connections) - 1
 			}
 			saveConfig()
+			currentTab = targetTab
 			refreshConnectionsList(index)
 			checkHosts([]SSHConnection{updated})
 			showMain()
 		}).
 		AddButton(currentLang["btn_cancel"], showMain)
 
+	form.GetFormItem(4).(*tview.DropDown).SetListStyles(
+		tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkBlue),
+		tcell.StyleDefault.Foreground(tcell.ColorWhite).Background(tcell.ColorDarkRed),
+	)
 	showForm(title, form, errorText)
 }
 
-// deleteConnection asks for confirmation and removes the connection
+// deleteConnection asks for confirmation and removes the connection from the current tab
 func deleteConnection(index int) {
-	server := config.Connections[index].Server
+	server := currentConnections()[index].Server
 	confirm(fmt.Sprintf(currentLang["dlg_delete"], server), func() {
-		config.Connections = append(config.Connections[:index], config.Connections[index+1:]...)
+		tab := &config.Tabs[currentTab]
+		tab.Connections = slices.Delete(tab.Connections, index, index+1)
 		delete(hostStatuses, server)
 		saveConfig()
 		refreshConnectionsList(index)
