@@ -6,10 +6,31 @@ package main
 import (
 	"fmt"
 	"log"
+	"unicode"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
+
+// russianToLatin maps letters of the Russian layout to the Latin letters on the same keys
+var russianToLatin = map[rune]rune{
+	'й': 'q', 'ц': 'w', 'у': 'e', 'к': 'r', 'е': 't', 'н': 'y', 'г': 'u', 'ш': 'i', 'щ': 'o', 'з': 'p',
+	'ф': 'a', 'ы': 's', 'в': 'd', 'а': 'f', 'п': 'g', 'р': 'h', 'о': 'j', 'л': 'k', 'д': 'l',
+	'я': 'z', 'ч': 'x', 'с': 'c', 'м': 'v', 'и': 'b', 'т': 'n', 'ь': 'm',
+}
+
+// latinCtrlKey turns Ctrl with a Russian letter into Ctrl with the Latin letter on the same key.
+// Terminals with the extended keyboard protocol report the letter of the current layout,
+// so Ctrl+E arrives as Ctrl+У.
+func latinCtrlKey(event *tcell.EventKey) *tcell.EventKey {
+	if event.Key() != tcell.KeyRune || event.Modifiers() != tcell.ModCtrl {
+		return event
+	}
+	if r, ok := russianToLatin[unicode.ToLower(event.Rune())]; ok {
+		return tcell.NewEventKey(tcell.KeyRune, r, tcell.ModCtrl)
+	}
+	return event
+}
 
 // isSSHCheckKey matches Ctrl+Enter and the Ctrl+T fallback. Terminals that tell
 // Ctrl+Enter apart from Enter usually send it as Ctrl+J, the rest send plain Enter.
@@ -25,6 +46,14 @@ func isSSHCheckKey(event *tcell.EventKey) bool {
 
 // handleKey processes shortcuts of the main screen; dialogs and forms receive keys untouched
 func handleKey(event *tcell.EventKey) *tcell.EventKey {
+	if converted := latinCtrlKey(event); converted != event {
+		// tview stops on Ctrl+C only when the event wasn't replaced
+		if converted.Key() == tcell.KeyCtrlC {
+			app.Stop()
+			return nil
+		}
+		event = converted
+	}
 	if !mainScreen {
 		return event
 	}
