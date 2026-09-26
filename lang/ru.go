@@ -41,13 +41,6 @@ var RU = map[string]string{
 	"dlg_delete":  "Удалить соединение %s?",
 	"dlg_add":     "Добавить новое соединение?",
 
-	// SSH login check
-	"dlg_ssh_checking": "Проверка входа по SSH: %s…",
-	"ssh_ok":           "%s\n\nВход по SSH выполнен за %.1f с",
-	"ssh_denied":       "%s\n\nSSH-сервер отвечает, но войти не удалось:\n%s",
-	"ssh_failed":       "%s\n\nНе удалось подключиться:\n%s",
-	"ssh_timeout":      "%s\n\nНет ответа за %d с",
-
 	// Tabs
 	"tab_default":          "Основные",
 	"title_tab_add":        "Новая вкладка",

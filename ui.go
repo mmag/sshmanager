@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"slices"
 	"strings"
@@ -293,29 +292,6 @@ func connectTo(index int) {
 		resumeChecks()
 		showMain()
 	})
-}
-
-// checkSSH runs a full ssh login check for the connection and shows the result
-func checkSSH(index int) {
-	conn := currentConnections()[index]
-	ctx, cancel := context.WithCancel(context.Background())
-	showModal(fmt.Sprintf(currentLang["dlg_ssh_checking"], conn.Server), []string{currentLang["btn_cancel"]}, func(string) {
-		cancel()
-		showMain()
-	})
-
-	go func() {
-		result := sshCheck(ctx, conn)
-		app.QueueUpdateDraw(func() {
-			if ctx.Err() != nil {
-				return // Cancelled by the user
-			}
-			cancel()
-			showModal(result, []string{currentLang["btn_ok"]}, func(string) {
-				showMain()
-			})
-		})
-	}()
 }
 
 // showConnectionForm displays a form for adding (index -1) or editing

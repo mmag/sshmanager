@@ -41,13 +41,6 @@ var EN = map[string]string{
 	"dlg_delete":  "Delete connection %s?",
 	"dlg_add":     "Add new connection?",
 
-	// SSH login check
-	"dlg_ssh_checking": "Checking SSH login: %s…",
-	"ssh_ok":           "%s\n\nSSH login succeeded in %.1f s",
-	"ssh_denied":       "%s\n\nSSH server responds, but login failed:\n%s",
-	"ssh_failed":       "%s\n\nConnection failed:\n%s",
-	"ssh_timeout":      "%s\n\nNo response in %d s",
-
 	// Tabs
 	"tab_default":          "Main",
 	"title_tab_add":        "New tab",

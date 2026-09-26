@@ -32,7 +32,7 @@ func handleKey(event *tcell.EventKey) *tcell.EventKey {
 	focus := app.GetFocus()
 	if isSSHCheckKey(event) {
 		if index := selectedConnection(); focus == connectionsList && index >= 0 {
-			checkSSH(index)
+			checkLogin(currentConnections()[index])
 		}
 		return nil
 	}

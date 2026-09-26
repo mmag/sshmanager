@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -42,11 +41,11 @@ func sshConnect(conn SSHConnection) {
 	}
 }
 
-// sshCheck logs in with ssh in batch mode and describes the outcome.
-// Unlike ping it follows ~/.ssh/config (aliases, ProxyJump) and verifies
-// that sshd accepts the user's key.
-func sshCheck(ctx context.Context, conn SSHConnection) string {
-	ctx, cancel := context.WithTimeout(ctx, sshCheckTimeout)
+// sshCheck reports whether sshd answers, trying to log in with ssh in batch mode.
+// Unlike ping it follows ~/.ssh/config (aliases, ProxyJump) and works for hosts
+// that block ICMP. A rejected login still means the server is alive.
+func sshCheck(conn SSHConnection) hostStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), sshCheckTimeout)
 	defer cancel()
 
 	args := []string{
@@ -60,46 +59,30 @@ func sshCheck(ctx context.Context, conn SSHConnection) string {
 	cmd := exec.CommandContext(ctx, "ssh", append(args, "exit")...)
 	cmd.WaitDelay = time.Second
 
-	start := time.Now()
 	output, err := cmd.CombinedOutput()
-	elapsed := time.Since(start)
-
-	if ctx.Err() == context.DeadlineExceeded {
-		return fmt.Sprintf(currentLang["ssh_timeout"], conn.Server, int(sshCheckTimeout.Seconds()))
+	if ctx.Err() != nil {
+		return statusOffline
 	}
 
 	// ssh exits with 255 on its own errors, any other code comes from the remote command
 	var exitErr *exec.ExitError
-	if err == nil || errors.As(err, &exitErr) && exitErr.ExitCode() != 255 {
-		return fmt.Sprintf(currentLang["ssh_ok"], conn.Server, elapsed.Seconds())
+	if err == nil || errors.As(err, &exitErr) && exitErr.ExitCode() != 255 || sshdResponded(string(output)) {
+		return statusOnline
 	}
-
-	message := lastLine(string(output))
-	if message == "" {
-		message = err.Error()
-	}
-	if sshdResponded(message) {
-		return fmt.Sprintf(currentLang["ssh_denied"], conn.Server, message)
-	}
-	return fmt.Sprintf(currentLang["ssh_failed"], conn.Server, message)
+	return statusOffline
 }
 
-// sshdResponded reports whether an ssh error happened after reaching the server
-func sshdResponded(message string) bool {
+// sshdResponded reports whether ssh failed after reaching the server
+func sshdResponded(output string) bool {
 	for _, marker := range []string{
 		"Permission denied",
 		"Host key verification failed",
 		"Too many authentication failures",
 		"Unable to negotiate",
 	} {
-		if strings.Contains(message, marker) {
+		if strings.Contains(output, marker) {
 			return true
 		}
 	}
 	return false
-}
-
-func lastLine(text string) string {
-	lines := strings.Split(strings.TrimSpace(text), "\n")
-	return strings.TrimSpace(lines[len(lines)-1])
 }

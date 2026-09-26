@@ -25,10 +25,12 @@ const (
 )
 
 var (
-	// hostStatuses and checksInFlight are keyed by server address
+	// hostStatuses and the in-flight sets are keyed by server address
 	// and only accessed from the UI goroutine
 	hostStatuses   = make(map[string]hostStatus)
 	checksInFlight = make(map[string]bool)
+	// loginChecksInFlight holds hosts checked with ssh; pings don't touch their status meanwhile
+	loginChecksInFlight = make(map[string]bool)
 
 	checkTicker   *time.Ticker
 	checkInterval time.Duration
@@ -90,7 +92,7 @@ func pingHost(host string) bool {
 func checkHosts(connections []SSHConnection) {
 	for _, conn := range connections {
 		server := conn.Server
-		if checksInFlight[server] {
+		if checksInFlight[server] || loginChecksInFlight[server] {
 			continue
 		}
 		checksInFlight[server] = true
@@ -103,7 +105,7 @@ func checkHosts(connections []SSHConnection) {
 			}
 			app.QueueUpdateDraw(func() {
 				delete(checksInFlight, server)
-				if !connectionExists(server) || hostStatuses[server] == status {
+				if !connectionExists(server) || loginChecksInFlight[server] || hostStatuses[server] == status {
 					return
 				}
 				hostStatuses[server] = status
@@ -111,6 +113,29 @@ func checkHosts(connections []SSHConnection) {
 			})
 		}()
 	}
+}
+
+// checkLogin checks the host with a full ssh login in the background;
+// the status shows as unknown until the result arrives
+func checkLogin(conn SSHConnection) {
+	server := conn.Server
+	if loginChecksInFlight[server] {
+		return
+	}
+	loginChecksInFlight[server] = true
+	hostStatuses[server] = statusUnknown
+	updateStatusSymbols()
+
+	go func() {
+		status := sshCheck(conn)
+		app.QueueUpdateDraw(func() {
+			delete(loginChecksInFlight, server)
+			if connectionExists(server) {
+				hostStatuses[server] = status
+				updateStatusSymbols()
+			}
+		})
+	}()
 }
 
 // startPeriodicChecks rechecks all hosts every check_interval seconds; 0 disables it
